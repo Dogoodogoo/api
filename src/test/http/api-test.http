@@ -1,0 +1,8 @@
+### [어디가개] 반려동물 동반 문화시설 데이터 최종 호출
+# @name getPetCultureData
+
+GET https://api.odcloud.kr/api/15111389/v1/uddi:41944402-8249-4e45-9e9d-a52d0a7db1cc
+    ?page=1
+    &perPage=10
+    &serviceKey=YbKf0yNfUYSi3UxE%2BJPmtyaiEWP4g8yN5B8mpU1VXh5GYB2MftKYjUzTpaDH0mQ0AJ2PLWWEd6Kh55c%2FJChFsg%3D%3D
+Accept: application/json

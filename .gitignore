@@ -1,0 +1,73 @@
+# ==============================================================================
+# 1. 시크릿 및 보안 설정 (최우선 관리 대상)
+# ==============================================================================
+# Spring Boot 시크릿 파일 (DB 계정, 패스워드, API 키 등)
+src/main/resources/application-secret.yml
+src/main/resources/application-secret.properties
+src/main/resources/application-api.yml
+
+# Python 환경 변수 및 시크릿 파일
+.env
+secret.py
+
+# IntelliJ HTTP Client 개인 환경 설정 파일 (API 테스트용)
+src/test/http/http-client.private.env.json
+
+
+# ==============================================================================
+# 2. Java & Spring Boot (빌드 및 컴파일)
+# ==============================================================================
+*.class
+*.log
+*.arc
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# 빌드 결과물
+/build/
+/out/
+/target/
+/bin/
+
+# Gradle/Maven 래퍼 및 설정
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/resources/**
+!**/src/test/resources/**
+
+
+# ==============================================================================
+# 3. Python & ETL (데이터 정제 환경)
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.python-version
+
+
+# ==============================================================================
+# 4. IDE 및 시스템 파일 (개인 설정)
+# ==============================================================================
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+out/
+
+# VS Code
+.vscode/
+.factorypath
+
+# OS 파일
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
