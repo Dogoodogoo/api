@@ -37,8 +37,13 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
 
     // --- 인프라 및 도구 ---
+    //application-secret.yml의 데이터를 객체로 변환하는 메타데이터를 컴파일 타임에 생성합니다.
+    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
+
+    //반복적인 코드 생성을 자동화하여 코드의 가독성과 유지보수성을 향상시키는 도구입니다.
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
+
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
