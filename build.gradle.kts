@@ -30,6 +30,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-web")
 
+    // Jackson 라이브러리를 명시적으로 추가하여 IDE 인식 오류를 방지합니다.
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+
     // PostGIS의 공간 데이터(Point, LineString)를 Java 객체와 매핑하기 위한 필수 라이브러리입니다.
     implementation("org.hibernate.orm:hibernate-spatial")
 

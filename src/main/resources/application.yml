@@ -4,3 +4,21 @@ spring:
 
   profiles:
     include: secret
+
+  docker:
+    compose:
+      enabled: false
+
+  # JPA 및 Hibernate 공통 설정 (보안 정보 제외)
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+logging:
+  level:
+    com.github.dogoodogoo.api: debug
