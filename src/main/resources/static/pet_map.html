@@ -4,20 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <title>반려동물 시설 시각화</title>
+    <title>도구도구 : 통합 공간 데이터 시각화</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 네이버 지도 클러스터러 라이브러리 -->
+    <script type="text/javascript" src="https://navermaps.github.io/maps.js.ncp/docs/js/marker-clusterer.js"></script>
     <style>
-        #map { width: 100%; height: calc(100vh - 120px); border-radius: 20px; background-color: #f8fafc; border: 1px solid #e2e8f0; }
+        #map { width: 100%; height: calc(100vh - 80px); background-color: #f1f5f9; }
         .info-window { padding: 18px; min-width: 280px; font-size: 13px; line-height: 1.6; }
-        .custom-scroll::-webkit-scrollbar { width: 4px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .marker-anim:hover { transform: scale(1.4) translateY(-5px); z-index: 1000; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .marker-anim { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); cursor: pointer; }
+        .marker-anim:hover { transform: scale(1.4) translateY(-5px); z-index: 1000; }
+        .filter-btn.active { background-color: #0f172a; color: white; border-color: #0f172a; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+
+        /* 클러스터 마커 디자인 */
+        .cluster-marker { width: 48px; height: 48px; line-height: 48px; text-align: center; border-radius: 50%; border: 3px solid white; color: white; font-weight: 900; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); cursor: pointer; transition: transform 0.2s; }
+        .cluster-marker:hover { transform: scale(1.15); }
+
+        #progress-container { position: fixed; top: 80px; left: 0; width: 100%; height: 3px; background: transparent; z-index: 100; }
+        #progress-bar { width: 0%; height: 100%; background: #4f46e5; transition: width 0.3s; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 h-screen flex flex-col overflow-hidden font-sans">
 
-<nav class="bg-white border-b border-slate-200 p-4 shadow-sm z-10 flex-none">
-    <div class="max-w-screen-2xl mx-auto flex items-center justify-between">
+<nav class="bg-white border-b border-slate-200 p-4 shadow-sm z-10 flex-none h-[80px]">
+    <div class="max-w-screen-2xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-4">
             <div class="p-2.5 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -25,166 +34,238 @@
                 </svg>
             </div>
             <div>
-                <h1 class="text-xl font-black text-slate-800 tracking-tight">어디가개 : 반려동물 동반 시설</h1>
-                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Local Backend Integration (v4.0.2)</p>
+                <h1 class="text-xl font-black text-slate-800 tracking-tight">도구도구 통합 맵</h1>
+                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Performance Optimized v9.9</p>
             </div>
         </div>
+
+        <div class="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 gap-1">
+            <button onclick="switchCategory('pet_places')" id="btn-pet_places" class="filter-btn active px-5 py-2 rounded-xl text-xs font-bold transition-all border border-transparent">🐾 반려견 장소</button>
+            <button onclick="switchCategory('drinking_fountains')" id="btn-drinking_fountains" class="filter-btn px-5 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-white transition-all border border-transparent">💧 음수대</button>
+            <button onclick="switchCategory('trash_bins')" id="btn-trash_bins" class="filter-btn px-5 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-white transition-all border border-transparent">🗑️ 쓰레기통</button>
+        </div>
+
         <div class="flex items-center gap-4">
             <div id="loading-status" class="hidden flex items-center gap-2 text-[11px] text-indigo-600 font-bold">
                 <div class="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                수집 중...
+                데이터 동기화...
             </div>
-            <button onclick="loadBackendData()" class="px-6 py-2.5 bg-slate-900 text-white rounded-2xl font-bold text-sm shadow-xl hover:bg-slate-800 transition-all active:scale-95">데이터 동기화</button>
+            <div class="px-4 py-2 bg-slate-900 text-white rounded-2xl font-bold text-xs">현재 시야: <span id="marker-count">0</span>건</div>
         </div>
     </div>
 </nav>
 
-<main class="flex-1 flex flex-row overflow-hidden">
-    <!-- 사이드바 시설 리스트 -->
-    <aside class="w-85 bg-white border-r border-slate-200 flex flex-col flex-none shadow-sm">
-        <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
-            <span class="text-xs font-black text-slate-500 uppercase tracking-widest">수집된 장소</span>
-            <span id="list-count" class="text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">0</span>
-        </div>
-        <div id="facility-list" class="flex-1 overflow-y-auto custom-scroll p-4 space-y-4">
-            <div class="py-20 text-center">
-                <p class="text-xs text-slate-400 italic">서버에서 데이터를<br>불러오는 중입니다.</p>
-            </div>
-        </div>
-    </aside>
+<div id="progress-container"><div id="progress-bar"></div></div>
 
-    <!-- 지도 영역 -->
-    <section class="flex-1 relative p-4 bg-slate-100">
-        <div id="map" class="shadow-inner"></div>
-    </section>
+<main class="flex-1 relative overflow-hidden bg-slate-100">
+    <div id="map"></div>
 </main>
 
 <script>
     let map;
     let markers = [];
-    let infoWindows = [];
+    let clusterer = null;
+    let currentCategory = 'pet_places';
+    let sharedInfoWindow = null;
+    let isAutoFitting = false;
+    let loadTimeout = null;
 
-    /*컨트롤러(/api/v1/facilities)를 통해 데이터를 수신합니다.*/
-    async function loadBackendData() {
+    const BACKEND_BASE_URL = 'http://localhost:8080';
+    // [성능 개선] 한 번에 처리하는 마커 수를 줄여 렌더링 랙을 최소화
+    const CHUNK_SIZE = 150;
+
+    const categoryConfig = {
+        // [수정] 모든 카테고리의 fetchSize를 500으로 엄격히 제한
+        pet_places: { label: '반려견 장소', endpoint: '/api/v1/pet-places', color: 'bg-indigo-600', clusterColor: '#4f46e5', icon: '🐾', fetchSize: 500 },
+        drinking_fountains: { label: '음수대', endpoint: '/api/v1/fountains', color: 'bg-sky-500', clusterColor: '#0ea5e9', icon: '💧', fetchSize: 500 },
+        trash_bins: { label: '쓰레기통', endpoint: '/api/v1/trash-bins', color: 'bg-emerald-600', clusterColor: '#059669', icon: '🗑️', fetchSize: 500 }
+    };
+
+    function switchCategory(category) {
+        if (currentCategory === category) return;
+        currentCategory = category;
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active', 'text-slate-500'));
+        document.getElementById(`btn-${category}`).classList.add('active');
+        loadCurrentCategoryData(true);
+    }
+
+    async function loadCurrentCategoryData(shouldFitBounds = false) {
+        if (!map) return;
+
         const loader = document.getElementById('loading-status');
-        loader.classList.remove('hidden');
+        const progressBar = document.getElementById('progress-bar');
 
-        // PetFacilityController.java 엔드포인트 호출
-        const url = "/api/v1/facilities?page=1&size=100";
+        const bounds = map.getBounds();
+        const sw = bounds.getSW();
+        const ne = bounds.getNE();
+        const center = map.getCenter();
+
+        loader.classList.remove('hidden');
+        progressBar.style.width = '0%';
+
+        const conf = categoryConfig[currentCategory];
+
+        const params = new URLSearchParams({
+            minLat: sw.lat(),
+            maxLat: ne.lat(),
+            minLng: sw.lng(),
+            maxLng: ne.lng(),
+            centerLat: center.lat(),
+            centerLng: center.lng(),
+            page: 1,
+            size: conf.fetchSize // 500건으로 제한된 파라미터 전송
+        });
+
+        const url = `${BACKEND_BASE_URL}${conf.endpoint}?${params.toString()}`;
+
         try {
             const response = await fetch(url);
-            if (!response.ok) throw new Error("Backend API Connection Failed");
-
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            renderData(data.items);
+            let items = data.items || [];
+
+            // [추가] 클라이언트 사이드에서도 500건을 넘지 않도록 보장
+            if (items.length > conf.fetchSize) {
+                items = items.slice(0, conf.fetchSize);
+            }
+
+            document.getElementById('marker-count').innerText = items.length;
+            processMarkersInChunks(items, currentCategory, shouldFitBounds);
         } catch (e) {
-            console.error(e);
-            const listContainer = document.getElementById('facility-list');
-            listContainer.innerHTML = `<div class='p-10 text-center text-xs text-red-500 font-bold'>서버 통신 실패<br>${e.message}</div>`;
-        } finally {
+            console.error("데이터 로드 실패:", e);
             loader.classList.add('hidden');
         }
     }
 
-    const categoryMap = {
-        '12': { name: '관광지', color: 'bg-emerald-500' },
-        '14': { name: '문화시설', color: 'bg-blue-500' },
-        '28': { name: '레포츠', color: 'bg-cyan-500' },
-        '32': { name: '숙박', color: 'bg-purple-600' },
-        '38': { name: '쇼핑', color: 'bg-pink-500' },
-        '39': { name: '음식점', color: 'bg-orange-500' }
-    };
-
-    /**
-     * [알고리즘: Marker & Overlay Rendering]
-     * 백엔드 DTO(PetFacilityResponse) 구조에 맞춰 지도 위에 마커를 렌더링합니다.
-     */
-    function renderData(items) {
+    function processMarkersInChunks(items, category, shouldFitBounds) {
+        if (clusterer) { clusterer.clearMarkers(); clusterer.setMap(null); clusterer = null; }
         markers.forEach(m => m.setMap(null));
-        infoWindows.forEach(iw => iw.close());
-        markers = []; infoWindows = [];
+        markers = [];
+        if (sharedInfoWindow) sharedInfoWindow.close();
 
-        const listContainer = document.getElementById('facility-list');
-        listContainer.innerHTML = '';
-        document.getElementById('list-count').innerText = items.length;
-        const bounds = new naver.maps.LatLngBounds();
+        const conf = categoryConfig[category];
+        const total = items.length;
+        let index = 0;
+        const tempBounds = new naver.maps.LatLngBounds();
 
-        items.forEach((item) => {
-            const latlng = new naver.maps.LatLng(item.latitude, item.longitude);
-            bounds.extend(latlng);
+        if (total === 0) {
+            document.getElementById('loading-status').classList.add('hidden');
+            document.getElementById('progress-bar').style.width = '0%';
+            return;
+        }
 
-            const catInfo = categoryMap[item.categoryId] || { name: '기타', color: 'bg-slate-500' };
+        function renderChunk() {
+            const end = Math.min(index + CHUNK_SIZE, total);
+            for (; index < end; index++) {
+                const item = items[index];
+                if (!item.latitude || !item.longitude || item.latitude === 0) continue;
 
-            // 커스텀 마커 디자인
-            const marker = new naver.maps.Marker({
-                position: latlng,
-                map: map,
-                icon: {
-                    content: `<div class="marker-anim w-4 h-4 ${catInfo.color} border-2 border-white rounded-full shadow-xl"></div>`,
-                    anchor: new naver.maps.Point(8, 8)
+                const latlng = new naver.maps.LatLng(item.latitude, item.longitude);
+                if (shouldFitBounds) tempBounds.extend(latlng);
+
+                const marker = new naver.maps.Marker({
+                    position: latlng,
+                    map: null,
+                    icon: {
+                        content: `<div class="marker-anim w-6 h-6 ${conf.color} border-2 border-white rounded-full shadow-lg flex items-center justify-center text-[10px] text-white font-bold">${conf.icon}</div>`,
+                        anchor: new naver.maps.Point(12, 12)
+                    }
+                });
+
+                (function(m, i, c) {
+                    naver.maps.Event.addListener(m, "click", () => {
+                        const content = generateHtml(i, c, conf);
+                        sharedInfoWindow.setContent(content);
+                        sharedInfoWindow.open(map, m);
+                    });
+                })(marker, item, category);
+
+                markers.push(marker);
+            }
+
+            document.getElementById('progress-bar').style.width = `${(index / total) * 100}%`;
+
+            if (index < total) {
+                setTimeout(renderChunk, 10);
+            } else {
+                initClustering(conf);
+                if (shouldFitBounds && !tempBounds.isEmpty()) {
+                    isAutoFitting = true;
+                    map.fitBounds(tempBounds);
+                    setTimeout(() => { isAutoFitting = false; }, 500);
                 }
-            });
-
-            // 정보창 디자인 (V2 상세 데이터 포함)
-            const infoWindow = new naver.maps.InfoWindow({
-                content: `
-                    <div class="info-window bg-white shadow-2xl rounded-3xl p-6 border border-slate-50">
-                        <div class="flex items-center gap-2 mb-3">
-                            <span class="text-[9px] font-black ${catInfo.color} text-white px-2 py-0.5 rounded-lg uppercase tracking-tighter">${catInfo.name}</span>
-                        </div>
-                        <h4 class="font-black text-slate-900 text-base mb-3 leading-tight">${item.title}</h4>
-                        <div class="space-y-3 text-[11px] text-slate-500 border-t border-slate-50 pt-4">
-                            <p class="flex items-start gap-2"><span class="font-black text-slate-800 min-w-[50px]">주소</span> <span>${item.address}</span></p>
-                            <p class="flex items-start gap-2"><span class="font-black text-slate-800 min-w-[50px]">동반안내</span> <span class="text-indigo-600 font-bold">${item.petInfo || '현장 확인 필요'}</span></p>
-                            ${item.petEtiquette ? `<p class="flex items-start gap-2"><span class="font-black text-slate-800 min-w-[50px]">에티켓</span> <span>${item.petEtiquette}</span></p>` : ''}
-                        </div>
-                    </div>
-                `,
-                borderWidth: 0, backgroundColor: "transparent", disableAnchor: true, pixelOffset: new naver.maps.Point(0, -10)
-            });
-
-            markers.push(marker);
-            infoWindows.push(infoWindow);
-
-            naver.maps.Event.addListener(marker, "click", () => {
-                infoWindows.forEach(iw => iw.close());
-                infoWindow.open(map, marker);
-                map.panTo(latlng);
-            });
-
-            // 리스트 카드 생성
-            const card = document.createElement('div');
-            card.className = "group p-5 bg-white border border-slate-100 rounded-[1.5rem] text-[11px] cursor-pointer hover:border-indigo-400 hover:shadow-lg transition-all duration-300";
-            card.innerHTML = `
-                <div class="flex justify-between items-start mb-2">
-                    <b class="text-slate-900 text-sm font-black truncate max-w-[180px] group-hover:text-indigo-600 transition-colors">${item.title}</b>
-                    <span class="text-[9px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-lg">${catInfo.name}</span>
-                </div>
-                <div class="text-[10px] text-slate-400 truncate">${item.address}</div>
-            `;
-            card.onclick = () => {
-                map.morph(latlng, 16);
-                infoWindows.forEach(iw => iw.close());
-                infoWindow.open(map, marker);
-            };
-            listContainer.appendChild(card);
-        });
-
-        if (items.length > 0) map.fitBounds(bounds);
+            }
+        }
+        renderChunk();
     }
 
-    (function init() {
-        // Naver Maps 초기화 (NaverMapConfig의 Client ID와 일치해야 함)
+    function generateHtml(item, category, conf) {
+        let title = '';
+        if (category === 'pet_places') title = item.placeName;
+        else if (category === 'drinking_fountains') title = item.fountainName;
+        else if (category === 'trash_bins') title = (item.cityName || '') + ' ' + (item.locationDesc || '가로휴지통');
+
+        return `
+            <div class="info-window bg-white shadow-2xl rounded-3xl p-6 border border-slate-50">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-[9px] font-black ${conf.color} text-white px-2 py-0.5 rounded-lg uppercase tracking-tighter">${conf.label}</span>
+                </div>
+                <h4 class="font-black text-slate-900 text-base mb-3 leading-tight">${title || '정보 없음'}</h4>
+                <div class="space-y-2 text-[11px] text-slate-500 border-t border-slate-50 pt-3">
+                    <p class="flex items-start gap-2"><span class="font-black text-slate-800 min-w-[55px]">주소</span> <span>${item.address || '-'}</span></p>
+                    ${category === 'pet_places' ? `<p class="flex items-start gap-2"><span class="font-black text-slate-800 min-w-[55px]">동반정보</span> <span class="text-indigo-600 font-bold">${item.petInfo || '확인 필요'}</span></p>` : ''}
+                    ${category === 'drinking_fountains' ? `<p class="flex items-start gap-2"><span class="font-black text-slate-800 min-w-[55px]">관리주체</span> <span>${item.managedBy || '-'}</span></p>` : ''}
+                    ${category === 'trash_bins' ? `<p class="flex items-start gap-2"><span class="font-black text-slate-800 min-w-[55px]">수거유형</span> <span class="text-emerald-600 font-bold">${item.binType || '일반'}</span></p>` : ''}
+                </div>
+            </div>`;
+    }
+
+    function initClustering(conf) {
+        if (typeof MarkerClustering !== 'undefined' && markers.length > 0) {
+            clusterer = new MarkerClustering({
+                minClusterSize: 2,
+                maxZoom: 15,
+                map: map,
+                markers: markers,
+                disableClickZoom: false,
+                gridSize: 120,
+                icons: Array(5).fill({ content: `<div class="cluster-marker" style="background:${conf.clusterColor}"></div>` }),
+                // [수정] 500건 한도에 최적화된 인덱스 설정
+                indexGenerator: [10, 50, 100, 250, 500],
+                stylingFunction: (clusterMarker, count) => {
+                    const el = clusterMarker.getElement();
+                    if (el && el.querySelector('.cluster-marker')) el.querySelector('.cluster-marker').innerText = count;
+                }
+            });
+        } else {
+            markers.forEach(m => m.setMap(map));
+        }
+
+        document.getElementById('loading-status').classList.add('hidden');
+        setTimeout(() => { document.getElementById('progress-bar').style.width = '0%'; }, 500);
+    }
+
+    (function initMap() {
         const script = document.createElement('script');
         script.src = 'https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=nxnux3f3r1&submodules=geocoder';
         script.onload = () => {
             map = new naver.maps.Map('map', {
-                center: new naver.maps.LatLng(37.5665, 126.9780),
-                zoom: 12,
+                center: new naver.maps.LatLng(37.5172, 127.0473),
+                zoom: 14,
                 zoomControl: true,
-                zoomControlOptions: { position: naver.maps.Position.RIGHT_CENTER }
+                mapTypeControl: true
             });
-            loadBackendData();
+
+            sharedInfoWindow = new naver.maps.InfoWindow({
+                borderWidth: 0, backgroundColor: "transparent", disableAnchor: true, pixelOffset: new naver.maps.Point(0, -10)
+            });
+
+            naver.maps.Event.addListener(map, 'idle', () => {
+                if (!isAutoFitting) {
+                    if (loadTimeout) clearTimeout(loadTimeout);
+                    loadTimeout = setTimeout(loadCurrentCategoryData, 300);
+                }
+            });
         };
         document.head.appendChild(script);
     })();
