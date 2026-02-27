@@ -40,6 +40,9 @@ dependencies {
     // OWASP A03(Injection) 방어를 위해 사용자의 입력값(좌표 등)을 어노테이션 레벨에서 검증합니다.
     implementation("org.springframework.boot:spring-boot-starter-validation")
 
+    // Swagger UI 및 OpenAPI 3.0 자동 생성 라이브러리
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5")
+
     // --- 인프라 및 도구 ---
     //application-secret.yml의 데이터를 객체로 변환하는 메타데이터를 컴파일 타임에 생성합니다.
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
