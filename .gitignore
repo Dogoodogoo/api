@@ -35,6 +35,7 @@ src/test/http/http-client.private.env.json
 # 3. Gradle Wrapper (빌드 필수 파일은 유지)
 # ==============================================================================
 !gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
 
 # ==============================================================================
 # 4. OS 및 기타
