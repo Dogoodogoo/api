@@ -1,0 +1,63 @@
+name: DogooDogoo API CI/CD
+
+# main 브랜치에 코드가 push 될 때 파이프라인이 작동합니다.
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. GitHub Repository의 코드를 가져옵니다.
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. 프로젝트 스펙에 맞게 Java 21 환경을 세팅합니다.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # 3. Gradle 빌드를 수행합니다. (api 레포지토리 최상위 기준)
+      - name: Build with Gradle
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean build -x test
+
+      # 4. 빌드된 JAR 파일을 테스트 서버(홈 서버)로 전송합니다.
+      - name: Transfer JAR to Server via SCP
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 2025
+          source: "build/libs/*SNAPSHOT.jar"
+          target: "~/app/dogoodogoo"
+          strip_components: 2
+
+      # 5. 서버에 SSH로 접속하여 기존 앱을 종료하고 새 앱을 백그라운드(nohup)로 실행합니다.
+      - name: Execute Server Run Script
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 2025
+          script: |
+            # 리눅스 서버의 실제 배포 경로로 이동합니다.
+            cd ~/app/dogoodogoo
+            
+            # 현재 실행 중인 Spring Boot 프로세스 종료 (포트 8080 기준)
+            PID=$(fuser 8080/tcp 2>/dev/null) || true
+            if [ -n "$PID" ]; then
+              echo "기존 프로세스($PID)를 종료합니다."
+              kill -9 $PID
+            fi
+            
+            # 새 JAR 파일 실행
+            echo "새로운 애플리케이션을 배포합니다."
+            nohup java -jar $(ls -t *SNAPSHOT.jar | head -1) > app.log 2>&1 &
