@@ -6,11 +6,11 @@
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>도구도구 : 통합 공간 데이터 시각화</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- [수정] 네이버 지도 SDK를 헤더에서 먼저 로드 (인증 실패 방지 및 실행 순서 보장) -->
-    <!-- ncpClientId 뒤에 세이핀님의 실제 클라이언트 ID를 입력하십시오. -->
-    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=nxnux3f3r1&submodules=geocoder"></script>
-    <!-- 클러스터러 라이브러리는 지도 SDK 이후에 로드되어야 합니다. -->
+
+    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=nxnux3f3r1&submodules=geocoder"></script>
+    <!-- 클러스터러 라이브러리는 지도 SDK 로드 후에 배치 -->
     <script type="text/javascript" src="https://navermaps.github.io/maps.js.ncp/docs/js/marker-clusterer.js"></script>
+
     <style>
         #map { width: 100%; height: calc(100vh - 80px); background-color: #f1f5f9; }
         .info-window { padding: 18px; min-width: 280px; font-size: 13px; line-height: 1.6; }
@@ -24,7 +24,6 @@
 </head>
 <body class="bg-slate-50 text-slate-900 h-screen flex flex-col overflow-hidden font-sans">
 
-<!-- 상단 네비게이션 바 (중복되지 않도록 단 하나만 존재해야 함) -->
 <nav class="bg-white border-b border-slate-200 p-4 shadow-sm z-10 flex-none h-[80px]">
     <div class="max-w-screen-2xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-4">
@@ -35,7 +34,7 @@
             </div>
             <div>
                 <h1 class="text-xl font-black text-slate-800 tracking-tight">도구도구 통합 맵</h1>
-                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Performance Optimized v10.2</p>
+                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Final Stable v11.0</p>
             </div>
         </div>
 
@@ -48,7 +47,7 @@
         <div class="flex items-center gap-4">
             <div id="loading-status" class="hidden flex items-center gap-2 text-[11px] text-indigo-600 font-bold">
                 <div class="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                데이터 동기화...
+                동기화 중...
             </div>
             <div class="px-4 py-2 bg-slate-900 text-white rounded-2xl font-bold text-xs">현재 시야: <span id="marker-count">0</span>건</div>
         </div>
@@ -62,21 +61,25 @@
     let map, markers = [], clusterer = null, currentCategory = 'pet_places', sharedInfoWindow = null;
     let isAutoFitting = false, loadTimeout = null;
 
-    // 서버와 로컬 환경 통합 대응
-    const BACKEND_BASE_URL = window.location.origin;
+    const API_BASE_PATH = '/api/v1';
     const CHUNK_SIZE = 150;
 
     const categoryConfig = {
-        pet_places: { label: '반려견 장소', endpoint: '/api/v1/pet-places', color: 'bg-indigo-600', clusterColor: '#4f46e5', icon: '🐾', fetchSize: 500 },
-        drinking_fountains: { label: '음수대', endpoint: '/api/v1/fountains', color: 'bg-sky-500', clusterColor: '#0ea5e9', icon: '💧', fetchSize: 500 },
-        trash_bins: { label: '쓰레기통', endpoint: '/api/v1/trash-bins', color: 'bg-emerald-600', clusterColor: '#059669', icon: '🗑️', fetchSize: 500 }
+        pet_places: { label: '반려견 장소', endpoint: '/pet-places', color: 'bg-indigo-600', clusterColor: '#4f46e5', icon: '🐾', fetchSize: 500 },
+        drinking_fountains: { label: '음수대', endpoint: '/fountains', color: 'bg-sky-500', clusterColor: '#0ea5e9', icon: '💧', fetchSize: 500 },
+        trash_bins: { label: '쓰레기통', endpoint: '/trash-bins', color: 'bg-emerald-600', clusterColor: '#059669', icon: '🗑️', fetchSize: 500 }
     };
 
     function switchCategory(category) {
         if (currentCategory === category) return;
         currentCategory = category;
-        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active', 'text-slate-500'));
-        document.getElementById(`btn-${category}`).classList.add('active');
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+            btn.classList.add('text-slate-500');
+        });
+        const activeBtn = document.getElementById(`btn-${category}`);
+        activeBtn.classList.add('active');
+        activeBtn.classList.remove('text-slate-500');
         loadCurrentCategoryData(true);
     }
 
@@ -85,6 +88,8 @@
         const loader = document.getElementById('loading-status'), progressBar = document.getElementById('progress-bar');
         const bounds = map.getBounds(), sw = bounds.getSW(), ne = bounds.getNE(), center = map.getCenter();
         const conf = categoryConfig[currentCategory];
+
+        if (sw.lat() === ne.lat()) return;
 
         loader.classList.remove('hidden');
         progressBar.style.width = '0%';
@@ -100,18 +105,25 @@
             params.append('centerLng', center.lng());
         }
 
-        const url = `${BACKEND_BASE_URL}${conf.endpoint}?${params.toString()}`;
+        // URL 생성 로직: 슬래시 중복 방지 및 절대 경로 보장
+        const base = (window.location.origin === 'null' || !window.location.origin || window.location.origin.includes('usercontent'))
+            ? 'http://localhost:8080'
+            : window.location.origin;
+
+        const url = base + API_BASE_PATH + conf.endpoint + '?' + params.toString();
 
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            const items = data.items || [];
+
+            // [중요 수정] 백엔드가 Map.of("items", ...)를 주든, 바로 List를 주든 모두 대응합니다.
+            const items = Array.isArray(data) ? data : (data.items || []);
 
             document.getElementById('marker-count').innerText = items.length;
             processMarkersInChunks(items, currentCategory, shouldFitBounds);
         } catch (e) {
-            console.error("데이터 로드 실패:", e);
+            console.error("데이터 로드 실패:", e, "URL:", url);
             loaderFinish();
         }
     }
@@ -156,7 +168,8 @@
             else {
                 initClustering(conf);
                 if (shouldFitBounds && !tempBounds.isEmpty()) {
-                    isAutoFitting = true; map.fitBounds(tempBounds);
+                    isAutoFitting = true;
+                    map.fitBounds(tempBounds);
                     setTimeout(() => { isAutoFitting = false; }, 500);
                 }
             }
@@ -196,8 +209,12 @@
         loaderFinish();
     }
 
-    // [정정] 지도를 초기화하는 정적 로직
     window.onload = function() {
+        if (typeof naver === 'undefined') {
+            console.error("Naver Maps SDK 로드 실패.");
+            return;
+        }
+
         map = new naver.maps.Map('map', {
             center: new naver.maps.LatLng(37.5172, 127.0473),
             zoom: 14,
