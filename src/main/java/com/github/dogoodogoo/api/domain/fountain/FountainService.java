@@ -18,8 +18,8 @@ public class FountainService {
 
     private final FountainRepository fountainRepository;
 
-    public List<FountainResponse> findAll(int page, int size) {
-        return fountainRepository.findAll(PageRequest.of(page - 1, size))
+    public List<FountainResponse> findInBounds(Double minLat, Double maxLat, Double minLng, Double maxLng, int size) {
+        return fountainRepository.findByLocation(minLat, maxLat, minLng, maxLng, PageRequest.of(0, size))
                 .getContent()
                 .stream()
                 .map(this::convertToDto)
