@@ -3,7 +3,7 @@ name: DogooDogoo API CI/CD
 # main 브랜치에 코드가 push 될 때 파이프라인이 작동합니다.
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "develop" ]
 
 jobs:
   build-and-deploy:
