@@ -1,6 +1,6 @@
 name: DogooDogoo API CI/CD
 
-# main 브랜치에 코드가 push 될 때 파이프라인이 작동합니다.
+# develop 브랜치에 코드가 push 될 때 파이프라인이 작동합니다.
 on:
   push:
     branches: [ "develop" ]
@@ -58,6 +58,6 @@ jobs:
               kill -9 $PID
             fi
             
-            # 새 JAR 파일 실행
-            echo "새로운 애플리케이션을 배포합니다."
-            nohup java -jar $(ls -t *SNAPSHOT.jar | head -1) > app.log 2>&1 &
+            echo "Develop 브랜치 최신본을 배포합니다."
+            # 파일명이 중복될 경우 가장 최신 파일을 실행
+            nohup java -jar $(ls -t *SNAPSHOT.jar | head -1) > develop-app.log 2>&1 &
