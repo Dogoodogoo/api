@@ -6,6 +6,8 @@
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>도구도구 : 통합 공간 데이터 시각화</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=nxnux3f3r1&submodules=geocoder"></script>
+    <!-- 클러스터러 라이브러리 -->
 
     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=nxnux3f3r1&submodules=geocoder"></script>
     <!-- 클러스터러 라이브러리는 지도 SDK 로드 후에 배치 -->
@@ -34,6 +36,7 @@
             </div>
             <div>
                 <h1 class="text-xl font-black text-slate-800 tracking-tight">도구도구 통합 맵</h1>
+                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Merged UI v11.1</p>
                 <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Final Stable v11.0</p>
             </div>
         </div>
@@ -61,10 +64,14 @@
     let map, markers = [], clusterer = null, currentCategory = 'pet_places', sharedInfoWindow = null;
     let isAutoFitting = false, loadTimeout = null;
 
+    const BACKEND_BASE_URL = window.location.origin;
     const API_BASE_PATH = '/api/v1';
     const CHUNK_SIZE = 150;
 
     const categoryConfig = {
+        pet_places: { label: '반려견 장소', endpoint: '/api/v1/pet-places', color: 'bg-indigo-600', clusterColor: '#4f46e5', icon: '🐾', fetchSize: 500 },
+        drinking_fountains: { label: '음수대', endpoint: '/api/v1/fountains', color: 'bg-sky-500', clusterColor: '#0ea5e9', icon: '💧', fetchSize: 500 },
+        trash_bins: { label: '쓰레기통', endpoint: '/api/v1/trash-bins', color: 'bg-emerald-600', clusterColor: '#059669', icon: '🗑️', fetchSize: 1000 }
         pet_places: { label: '반려견 장소', endpoint: '/pet-places', color: 'bg-indigo-600', clusterColor: '#4f46e5', icon: '🐾', fetchSize: 500 },
         drinking_fountains: { label: '음수대', endpoint: '/fountains', color: 'bg-sky-500', clusterColor: '#0ea5e9', icon: '💧', fetchSize: 500 },
         trash_bins: { label: '쓰레기통', endpoint: '/trash-bins', color: 'bg-emerald-600', clusterColor: '#059669', icon: '🗑️', fetchSize: 500 }
@@ -105,6 +112,11 @@
             params.append('centerLng', center.lng());
         }
 
+        if (currentCategory === 'trash_bins') {
+            params.append('centerLat', center.lat());
+            params.append('centerLng', center.lng());
+        }
+
         // URL 생성 로직: 슬래시 중복 방지 및 절대 경로 보장
         const base = (window.location.origin === 'null' || !window.location.origin || window.location.origin.includes('usercontent'))
             ? 'http://localhost:8080'
@@ -117,12 +129,15 @@
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
+            const items = Array.isArray(data) ? data : (data.items || []);
             // [중요 수정] 백엔드가 Map.of("items", ...)를 주든, 바로 List를 주든 모두 대응합니다.
             const items = Array.isArray(data) ? data : (data.items || []);
 
             document.getElementById('marker-count').innerText = items.length;
             processMarkersInChunks(items, currentCategory, shouldFitBounds);
         } catch (e) {
+            console.error("데이터 로드 실패:", e);
+            loaderFinish();
             console.error("데이터 로드 실패:", e, "URL:", url);
             loaderFinish();
         }
@@ -208,6 +223,9 @@
         } else { markers.forEach(m => m.setMap(map)); }
         loaderFinish();
     }
+        } else { markers.forEach(m => m.setMap(map)); }
+        loaderFinish();
+    }
 
     window.onload = function() {
         if (typeof naver === 'undefined') {
@@ -215,6 +233,23 @@
             return;
         }
 
+    (function initMap() {
+        if (typeof naver === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=nxnux3f3r1&submodules=geocoder';
+            script.onload = setupMap;
+            document.head.appendChild(script);
+        } else {
+            setupMap();
+        }
+
+        function setupMap() {
+            map = new naver.maps.Map('map', {
+                center: new naver.maps.LatLng(37.5172, 127.0473),
+                zoom: 14,
+                zoomControl: true,
+                mapTypeControl: true
+            });
         map = new naver.maps.Map('map', {
             center: new naver.maps.LatLng(37.5172, 127.0473),
             zoom: 14,
@@ -228,6 +263,12 @@
             disableAnchor: true,
             pixelOffset: new naver.maps.Point(0, -10)
         });
+            sharedInfoWindow = new naver.maps.InfoWindow({
+                borderWidth: 0,
+                backgroundColor: "transparent",
+                disableAnchor: true,
+                pixelOffset: new naver.maps.Point(0, -10)
+            });
 
         naver.maps.Event.addListener(map, 'idle', () => {
             if (!isAutoFitting) {
@@ -238,6 +279,16 @@
 
         loadCurrentCategoryData(true);
     };
+            naver.maps.Event.addListener(map, 'idle', () => {
+                if (!isAutoFitting) {
+                    if (loadTimeout) clearTimeout(loadTimeout);
+                    loadTimeout = setTimeout(loadCurrentCategoryData, 300);
+                }
+            });
+
+            loadCurrentCategoryData(true);
+        }
+    })();
 </script>
 </body>
 </html>

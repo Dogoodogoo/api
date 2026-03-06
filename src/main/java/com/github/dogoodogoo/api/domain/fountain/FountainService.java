@@ -18,8 +18,13 @@ public class FountainService {
 
     private final FountainRepository fountainRepository;
 
+    private static final int MAX_RESPONSE_SIZE = 200;
+
     public List<FountainResponse> findInBounds(Double minLat, Double maxLat, Double minLng, Double maxLng, int size) {
-        return fountainRepository.findByLocation(minLat, maxLat, minLng, maxLng, PageRequest.of(0, size))
+
+        int effectiveSize = Math.min(size, MAX_RESPONSE_SIZE);
+
+        return fountainRepository.findByLocation(minLat, maxLat, minLng, maxLng, PageRequest.of(0, effectiveSize))
                 .getContent()
                 .stream()
                 .map(this::convertToDto)
