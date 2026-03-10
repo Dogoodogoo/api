@@ -5,7 +5,7 @@
 
 
 2.기술 스택 (Tech Stack)
-  - Backend: Java 21, Spring Boot 4.0.2, Spring Data JPA, Hibernate-Spatial
+  - Backend: Java 21, Spring Boot 3.5.4, Spring Data JPA, Hibernate-Spatial
   - Database: PostgreSQL + PostGIS (공간 데이터베이스)
   - API Docs: Swagger (OpenAPI 3.0 / springdoc-openapi-starter-webmvc-ui 2.8.5)
   - Data Pipeline (ETL): Python, Pandas, Requests (멀티스레딩 API 호출)
