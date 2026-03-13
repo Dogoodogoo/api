@@ -1,7 +1,7 @@
 package com.github.dogoodogoo.api.domain.stroll;
 
-//import com.github.dogoodogoo.api.domain.fountain.Fountain;
-//import com.github.dogoodogoo.api.domain.trashbin.TrashBin;
+import com.github.dogoodogoo.api.domain.fountain.Fountain;
+import com.github.dogoodogoo.api.domain.trashbin.TrashBin;
 import com.github.dogoodogoo.api.infra.tmap.TmapPedestrianClient;
 import com.github.dogoodogoo.api.infra.tmap.TmapPedestrianClient.TmapStrollRouteResult;
 import com.github.dogoodogoo.api.infra.tmap.TmapWaypoint;
@@ -14,7 +14,6 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -33,9 +32,10 @@ public class StrollRouteService {
 
     private static final double CIRCUITY_FACTOR = 1.35;         // 서울 도심 도보 굴곡률 기준(1.3 ~ 1.5)
     private static final double BRIDGE_PENALTY_FACTOR = 3.2;    // 교량 경유 시 적용할 가중 굴곡률
-    private static final int POPULATION_SIZE = 100;              // 섹터당 시뮬레이션 후보 경로 수(유전 알고리즘 개체 수)
+    private static final int POPULATION_SIZE = 100;             // 섹터당 시뮬레이션 후보 경로 수(유전 알고리즘 개체 수)
     private static final double MIN_POI_DISTANCE = 110.0;       // Tmap API 에러 방지를 위한 최소 지점 간격(m)
-    private static final double  ERROR_THRESHOLD = 0.2;         // 20% 오차 허용 임계값
+    private static final double ERROR_THRESHOLD = 0.2;          // 20% 오차 허용 임계값
+    private static final int MAX_GROBAL_ATTEMPTS = 10;          // 무한 루프 방지를 위한 최대 시도 횟수
 
     private static final double HAN_RIVER_LAT_MIN = 37.51;
     private static final double HAN_RIVER_LAT_MAX = 37.54;
@@ -48,6 +48,9 @@ public class StrollRouteService {
             return Collections.emptyList();
         }
 
+        List<StrollRouteResponse> finalResults = new ArrayList<>();
+        int totalAttempted = 0;
+
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             double baseAngle = ThreadLocalRandom.current().nextDouble(0, 360);
 
@@ -55,59 +58,40 @@ public class StrollRouteService {
             var f2 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, baseAngle + 120, baseAngle + 240, targetDist), executor);
             var f3 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, baseAngle + 240, baseAngle + 360, targetDist), executor);
 
-            List<StrollRouteResponse> rawResults = Stream.of(f1.join(), f2.join(), f3.join())
+            Stream.of(f1.join(), f2.join(), f3.join())
                     .filter(route -> route != null && route.getMatchScore() > 0.0)
-                    .collect(Collectors.toCollection(ArrayList::new));
+                    .forEach(finalResults::add);
 
-            // 결과가 3개 미만이면 동적 명칭 무의미.
-            if (rawResults.size() < 3) {
-                return rawResults;
+            while (finalResults.size() < 3 && totalAttempted < MAX_GROBAL_ATTEMPTS) {
+                totalAttempted++;
+                log.info("[Stroll] 경로 부족으로 추가 생성 시도 중... (현재 {}개)", finalResults.size());
+
+                double nextStart = ThreadLocalRandom.current().nextDouble(0, 360);
+                StrollRouteResponse extra = evolveBestPath(request, nextStart, nextStart + 120, targetDist);
+
+                if (extra != null && extra.getMatchScore() > 0.0) {
+                    finalResults.add(extra);
+                }
             }
-
-            return assignDynamicThemeNames(rawResults);
         }
 
+        for (int i = 0; i < finalResults.size(); i++) {
+            finalResults.set(i, rebuildWithFinalName(finalResults.get(i), "추천 경로 " + (i+1)));
+        }
+
+        return finalResults;
     }
 
-    private List<StrollRouteResponse> assignDynamicThemeNames(List<StrollRouteResponse> results) {
-        List<StrollRouteResponse> mutableResults = new ArrayList<>(results);
-
-        // 1. 활동량 집중 코스 : 경로가 가장 긴 코스
-        StrollRouteResponse activityFocus = mutableResults.stream()
-                .max(Comparator.comparingDouble(StrollRouteResponse::getTotalDistance))
-                .orElseThrow();
-        mutableResults.remove(activityFocus);
-
-        // 2. 편의 시설 집중 코스 : 활동량 집중 코스 제외 후 시설물(쓰레기통+음수대)이 가장 많은 코스
-        StrollRouteResponse facilityCenter = mutableResults.stream()
-                .max(Comparator.comparingLong(r -> r.getWaypoints().stream()
-                        .filter(w -> "TRASH_BIN".equals(w.getCategory()) || "FOUNTAIN".equals(w.getCategory()))
-                        .count()))
-                .orElseThrow();
-        mutableResults.remove(facilityCenter);
-
-        // 3. 최적 거리 집중 코스 : 사용자가 입력한 산책 거리와 가장 근접하는 코스
-        StrollRouteResponse optimalDistance = mutableResults.get(0);
-
-        return List.of(
-                rebuildWithTheme(activityFocus, "활동량 집중 코스"),
-                rebuildWithTheme(facilityCenter, "편의 시설 집중 코스"),
-                rebuildWithTheme(optimalDistance, "최적 거리 집중 코스")
-        );
-    }
-
-    private StrollRouteResponse rebuildWithTheme(StrollRouteResponse origin, String themeName) {
+    private StrollRouteResponse rebuildWithFinalName(StrollRouteResponse origin, String finalName) {
         return StrollRouteResponse.builder()
                 .strollId(origin.getStrollId())
-                .strollName(themeName)
+                .strollName(finalName)
                 .totalDistance(origin.getTotalDistance())
                 .estimatedTime(origin.getEstimatedTime())
                 .matchScore(origin.getMatchScore())
-                .path(origin.getPath())
-                .waypoints(origin.getWaypoints())
+                .path(origin.getPath()).waypoints(origin.getWaypoints())
                 .build();
     }
-
 
     /**
      * 특정 섹터 내에서 가장 적합도가 높은 경로를 선택하여 Tmap API로 최종 확정합니다.
@@ -159,10 +143,7 @@ public class StrollRouteService {
                 }
 
                 if (attempt == 3) {
-                    double errorRatio = (actualDist < minSafe) ? (minSafe - actualDist) / minSafe : (actualDist - maxSafe) / maxSafe;
-                    log.warn("[Stroll] 범위 이탈 ({}%). 실측 {}m / 유효 {}~{}m. 최하점으로 노출.",
-                            (int)(errorRatio * 100), (int)actualDist, (int)minSafe, (int)maxSafe);
-                    finalScore = 0.1;
+                    finalScore = 0.0;
                 }
             } else if (attempt == 3) {
                 finalScore = 0.0;
@@ -171,7 +152,7 @@ public class StrollRouteService {
 
         return StrollRouteResponse.builder()
                 .strollId(UUID.randomUUID().toString())
-                .strollName("TempName")
+                .strollName("Temp")
                 .totalDistance(actualDist > 0 ? actualDist : targetDist)
                 .estimatedTime(tmapResult.getTotalTime() > 0 ? tmapResult.getTotalTime() / 60 : (int)(targetDist / 60.0))
                 .matchScore(finalScore)
