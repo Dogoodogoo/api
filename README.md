@@ -1,39 +1,54 @@
-1.프로젝트 개요
-  - 서비스명: 어디가개 (DogooDogoo)
-  - 목표: 반려견의 특성(체급, 나이)과 사용자의 희망 산책 거리를 분석하여, 필수 인프라(쓰레기통, 음수대)를 경유하는 최적의 순환형(Loop) 맞춤 산책 경로를 3가지로 추천하는 PWA 서비스.
-  - 핵심 가치: 단순한 길찾기를 넘어선 '공간 지능(Spatial Intelligence)' 기반의 맞춤형 코스 제안 및 펫프렌들리 장소 정보 제공.
+1. 프로젝트 개요 (Overview)
 
+'어디가개'는 반려견주들이 산책 중 겪는 실질적인 불편함(배변 처리, 수분 공급 등)을 해결하기 위해 기획된 공간 지능(Spatial Intelligence) 기반 산책 지원 서비스입니다. 단순한 목적지 안내를 넘어 반려견의 나이와 체급에 맞는 최적의 보행 속도와 거리를 계산하고, 필수 시설물(쓰레기통, 음수대)을 경유하는 3가지 순환형(Loop) 산책로를 제안합니다.
 
-2.기술 스택 (Tech Stack)
-  - Backend: Java 21, Spring Boot 4.0.2, Spring Data JPA, Hibernate-Spatial
-  - Database: PostgreSQL + PostGIS (공간 데이터베이스)
-  - API Docs: Swagger (OpenAPI 3.0 / springdoc-openapi-starter-webmvc-ui 2.8.5)
-  - Data Pipeline (ETL): Python, Pandas, Requests (멀티스레딩 API 호출)
-  - External API: TMAP Pedestrian API(경로 탐색), Naver Geocoding(주소->좌표)
+2. 핵심 기술 스택 (Tech Stack)
 
+Backend: Java 21 (Virtual Threads 활용), Spring Boot 3.5.4, Spring Data JPA, Hibernate-Spatial
 
-3.데이터 파이프라인 (ETL) 설계
-  - 모든 공간 데이터는 PostGIS의 GEOMETRY(Point, 4326) 타입으로 변환되어 GIST 인덱스를 탑니다.
-  - 반려견 동반 장소: 공공데이터포털 API (KorPetTourService2) 자동 수집.
-  - 음수대: 서울 열린데이터 광장 API (TbViewGisArisu) 실시간 자동 수집.
-  - 가로 휴지통: 서울 열린데이터 광장 엑셀 파일 다운로드 -> Naver Geocoding으로 좌표 변환 후 적재.
+Infrastructure: RestClient (외부 API 통신), Jackson (GeoJSON 파싱 최적화)
 
+Database: PostgreSQL 17 + PostGIS (공간 인덱싱 및 지능형 쿼리)
 
-4.핵심 알고리즘: 120도 방사형 경로 추천 전략사용자가 시작 마커를 찍고 산책 거리($D$)를 설정하면, 다음 로직을 통해 3개의 서로 다른 경로를 반환합니다.
-  - 각도 분할: 시작점 기준 $0^\circ, 120^\circ, 240^\circ$ 방향 설정.
-  - 동적 변수 (다양성 확보): 매 호출 시마다 기본 각도에 $\pm 10\sim 20^\circ$ 오프셋, 거리($D/3$)에 $\pm 10\sim 15\%$ 오프셋을 무작위로 주어 매번 새로운 경로 생성.
-  - 가상 경유지 계산: PostGIS의 ST_Project를 사용하여 3개 섹터의 가상 경유지 좌표 계산.
-  - 실제 POI 매칭: ST_DWithin을 사용해 가상 경유지 반경 내의 필수 시설물(쓰레기통/음수대) 랜덤 추출.
-  - 경로 생성: 확정된 POI를 TMAP 보행자 API의 passList에 넣어 최종 Polyline 생성 (병렬 호출 최적화).
+API Docs: Swagger (OpenAPI 3.0)
 
+Data Pipeline: Python (Pandas, Requests) 기반 ETL 자동화
 
-5.법적 및 보안 아키텍처 (LBS 대응 전략)
-  - 위치기반서비스사업자(LBS) 규제 우회: 사용자의 실시간 GPS를 서버가 자동 수집하지 않습니다.
-  - 수동 마커 입력 방식: 사용자가 직접 지도상의 특정 지점을 클릭(Pin Drop)하여 전송한 좌표만 서버에서 '단순 계산 데이터'로 활용합니다.
-  - On-Device 처리: 실시간 산책 동선 트래킹 등 프라이버시에 민감한 데이터는 서버에 전송하지 않고 브라우저의 IndexedDB에만 저장하는 Privacy by Design 채택.
+External API: TMAP Pedestrian API (도보 경로), Naver Map SDK & Geocoding
 
+3. 지능형 경로 추천 엔진 (Intelligence Engine)
 
-6.현재까지 개발된 API 명세 (RESTful)
-  - GET /api/v1/pet-places: 뷰포트(minLat, maxLat, minLng, maxLng) 기반 반려견 동반 장소 조회.
-  - GET /api/v1/fountains: 페이징(page, size) 기반 전체 음수대 조회.
-  - GET /api/v1/trash-bins: 뷰포트 및 중심점 좌표(centerLat, centerLng) 기반 인접 가로 휴지통 정렬 조회.
+단순한 지점 연결이 아닌 유전 알고리즘(Genetic Algorithm)의 적합도 평가 모델을 도입하여 경로의 질을 극대화했습니다.
+
+🧬 알고리즘 워크플로우
+
+데이터 정규화: 사용자의 '년/개월' 입력 단위를 실수형 나이(Year)로 변환하여 퍼피/성견/노견에 맞는 정밀 속도 제어 로직을 적용합니다.
+
+섹터 기반 시뮬레이션: Java 21의 **가상 스레드(Virtual Threads)**를 활용하여 120도 간격의 3개 구역($0^\circ, 120^\circ, 240^\circ$)에 대해 수백 개의 경로 후보를 동시 생성합니다.
+
+적합도 평가 (Fitness Function):
+
+거리 정밀도 점수: 도심지 굴곡률(1.35)을 반영한 예측치와 사용자의 목표 거리 일치율 평가.
+
+시설물 가중치: 경로 내 쓰레기통 및 음수대 배치의 유용성 평가.
+
+최종 검증 및 가이드 추출: 선별된 '엘리트 경로'에 대해서만 TMAP API를 호출하여 실제 도로망 데이터를 확보하고, 실시간 회전 안내(Turn-by-turn) 정보를 파싱합니다.
+
+4. 주요 기능 (Key Features)
+
+지능형 경로 카드: 생성된 3종 경로의 예상 시간, 거리, 테마별 정보를 카드 UI로 제공.
+
+실시간 내비게이션 모드: 산책 시작 시 상단 배너를 통해 "[지점명]에서 왼쪽/오른쪽", "직진" 등 정제된 방향 정보 제공.
+
+통합 공간 맵: 반려견 동반 장소, 음수대, 쓰레기통의 위치를 클러스터링 기술로 시각화. 동일 좌표 시설물의 지능적 병합(Merging) 처리.
+
+5. 법적/보안 아키텍처 (Privacy by Design)
+
+LBS(위치기반서비스) 규제 대응 및 사용자 프라이버시 보호를 위해 다음 전략을 채택했습니다.
+
+수동 마커 방식: 서버가 실시간 GPS를 자동 수집하지 않고, 사용자가 지도에 직접 찍은 핀(Pin) 좌표만 계산 데이터로 활용합니다.
+
+On-Device 처리: 민감한 트래킹 데이터는 브라우저 내부에 저장하여 위치정보법 리스크를 지능적으로 우회합니다.
+
+6. API명세
+http://jhin.iptime.org:8080/swagger-ui/index.html
