@@ -1,7 +1,5 @@
 package com.github.dogoodogoo.api.domain.stroll;
 
-import com.github.dogoodogoo.api.domain.fountain.Fountain;
-import com.github.dogoodogoo.api.domain.trashbin.TrashBin;
 import com.github.dogoodogoo.api.infra.tmap.TmapPedestrianClient;
 import com.github.dogoodogoo.api.infra.tmap.TmapPedestrianClient.TmapStrollRouteResult;
 import com.github.dogoodogoo.api.infra.tmap.TmapWaypoint;
@@ -31,20 +29,16 @@ public class StrollRouteService {
     private final TmapPedestrianClient tmapPedestrianClient;
 
     private static final double CIRCUITY_FACTOR = 1.35;         // 서울 도심 도보 굴곡률 기준(1.3 ~ 1.5)
-    private static final double BRIDGE_PENALTY_FACTOR = 3.2;    // 교량 경유 시 적용할 가중 굴곡률
     private static final int POPULATION_SIZE = 100;             // 섹터당 시뮬레이션 후보 경로 수(유전 알고리즘 개체 수)
     private static final double MIN_POI_DISTANCE = 110.0;       // Tmap API 에러 방지를 위한 최소 지점 간격(m)
     private static final double ERROR_THRESHOLD = 0.2;          // 20% 오차 허용 임계값
-    private static final int MAX_GROBAL_ATTEMPTS = 10;          // 무한 루프 방지를 위한 최대 시도 횟수
-
-    private static final double HAN_RIVER_LAT_MIN = 37.51;
-    private static final double HAN_RIVER_LAT_MAX = 37.54;
+    private static final int MAX_GLOBAL_ATTEMPTS = 15;          // 무한 루프 방지를 위한 최대 시도 횟수
 
     public List<StrollRouteResponse> createStrollRoutes(StrollRouteRequest request) {
         double targetDist = request.getTargetDistanceInMeters();
 
-        if (targetDist <= 0) {
-            log.warn("유효하지 않은 목표 거리로 인해 경로 생성이 중단되었습니다.");
+        if (targetDist <= 0 || request.isInvalidDogInfo()) {
+            log.warn("유효하지 않은 요청 조건으로 인해 경로 생성이 중단되었습니다.");
             return Collections.emptyList();
         }
 
@@ -62,10 +56,8 @@ public class StrollRouteService {
                     .filter(route -> route != null && route.getMatchScore() > 0.0)
                     .forEach(finalResults::add);
 
-            while (finalResults.size() < 3 && totalAttempted < MAX_GROBAL_ATTEMPTS) {
+            while (finalResults.size() < 3 && totalAttempted < MAX_GLOBAL_ATTEMPTS) {
                 totalAttempted++;
-                log.info("[Stroll] 경로 부족으로 추가 생성 시도 중... (현재 {}개)", finalResults.size());
-
                 double nextStart = ThreadLocalRandom.current().nextDouble(0, 360);
                 StrollRouteResponse extra = evolveBestPath(request, nextStart, nextStart + 120, targetDist);
 
@@ -78,19 +70,7 @@ public class StrollRouteService {
         for (int i = 0; i < finalResults.size(); i++) {
             finalResults.set(i, rebuildWithFinalName(finalResults.get(i), "추천 경로 " + (i+1)));
         }
-
         return finalResults;
-    }
-
-    private StrollRouteResponse rebuildWithFinalName(StrollRouteResponse origin, String finalName) {
-        return StrollRouteResponse.builder()
-                .strollId(origin.getStrollId())
-                .strollName(finalName)
-                .totalDistance(origin.getTotalDistance())
-                .estimatedTime(origin.getEstimatedTime())
-                .matchScore(origin.getMatchScore())
-                .path(origin.getPath()).waypoints(origin.getWaypoints())
-                .build();
     }
 
     /**
@@ -98,70 +78,47 @@ public class StrollRouteService {
      */
     private StrollRouteResponse evolveBestPath(StrollRouteRequest request, double startAngle, double endAngle, double targetDist) {
 
-        Candidate elite = null;
-        TmapStrollRouteResult tmapResult = null;
-        double finalScore = 0.0;
-        double actualDist = 0.0;
+        Candidate elite = IntStream.range(0, POPULATION_SIZE)
+                .mapToObj(i -> simulateCandidate(request, startAngle, endAngle, targetDist))
+                .max(Comparator.comparingDouble(Candidate::getMatchScore))
+                .orElseThrow();
 
-        for (int attempt = 1; attempt <= 3; attempt++){
-            /*1. 후보군 생성 및 엘리트 선정*/
-            elite = IntStream.range(0, POPULATION_SIZE)
-                    .mapToObj(i -> simulateCandidate(request, startAngle, endAngle, targetDist))
-                    .max(Comparator.comparingDouble(Candidate::getMatchScore))
-                    .orElseThrow();
+        if (elite.getMatchScore() <= 0) return null;
 
-            if (elite.getMatchScore() <= 0) {
-                elite = generateSafeFallbackCandidate(request, startAngle, endAngle, targetDist);
-            }
+        TmapStrollRouteResult tmapResult = tmapPedestrianClient.fetchStrollRoute(
+                request.getLatitude(), request.getLongitude(), convertToTmapWp(elite.getWaypoints())
+        );
 
-            /*Tmap API 실측 데이터 획득*/
-            tmapResult = tmapPedestrianClient.fetchStrollRoute(
-                    request.getLatitude(), request.getLongitude(), convertToTmapWp(elite.getWaypoints())
-            );
+        double finalScore = elite.getMatchScore();
+        double actualDist = tmapResult.getTotalDistance();
 
-            actualDist = tmapResult.getTotalDistance();
-            finalScore = elite.getMatchScore();
+        if (tmapResult.isBridgeContained()) {
+            log.info("[Stroll] 경로 내 교량 감지로 인해 제외 됨.");
+            finalScore = 0.0;
+        }
 
-            /*범위 검증 및 재시도 판단*/
-            if (actualDist > 0) {
-                double minSafe, maxSafe;
-
-                // 1.체급만 선택한 경우 (범위 전체를 Safe Zone으로 설정)
-                if (request.getWalkingDistance() == null && request.getWalkingTime() == null && request.getDogSize() != null) {
-                    minSafe = request.getDogSize().getMin();
-                    maxSafe = request.getDogSize().getMax();
-                }
-
-                // 2. 산책거리 수치를 입력한 경우 (해당 지점의 20% 범위를 Safe Zone으로 설정)
-                else {
-                    minSafe = targetDist * (1.0 - ERROR_THRESHOLD);
-                    maxSafe = targetDist * (1.0 + ERROR_THRESHOLD);
-                }
-
-                if (actualDist >= minSafe && actualDist <= maxSafe) {
-                    break;
-                }
-
-                if (attempt == 3) {
-                    finalScore = 0.0;
-                }
-            } else if (attempt == 3) {
+        if (actualDist > 0 && finalScore > 0) {
+            double minSafe = targetDist * (1.0 - ERROR_THRESHOLD);
+            double maxSafe = targetDist * (1.0 + ERROR_THRESHOLD);
+            if (actualDist < minSafe || actualDist > maxSafe) {
                 finalScore = 0.0;
             }
+        } else if (actualDist <= 0) {
+            finalScore = 0.0;
         }
 
         return StrollRouteResponse.builder()
                 .strollId(UUID.randomUUID().toString())
                 .strollName("Temp")
                 .totalDistance(actualDist > 0 ? actualDist : targetDist)
-                .estimatedTime(tmapResult.getTotalTime() > 0 ? tmapResult.getTotalTime() / 60 : (int)(targetDist / 60.0))
+                .estimatedTime(tmapResult.getTotalTime() > 0 ? tmapResult.getTotalTime() / 60 : (int) (targetDist / 66.7))
                 .matchScore(finalScore)
                 .path(tmapResult.getCoordinates().stream()
                         .map(c -> StrollCoordinate.builder().latitude(c.getLatitude()).longitude(c.getLongitude()).build())
                         .toList())
                 .waypoints(elite.getWaypoints())
+                .navigationGuides(tmapResult.getNavigationGuides())
                 .build();
-
     }
 
     /**
@@ -221,82 +178,37 @@ public class StrollRouteService {
                     .build());
         }
 
-        return new Candidate(finalWaypoints, calculateMatchScore(finalWaypoints, request));
+        return new Candidate(finalWaypoints, calculateMatchScore(finalWaypoints, targetDist));
     }
 
     /**
      * 부합도 함수 : 목표 거리 정확도 및 시설물 배치 가중치를 계산합니다.
      */
-    private double calculateMatchScore(List<StrollWaypoint> waypoints, StrollRouteRequest request) {
-        double targetDist = request.getTargetDistanceInMeters();
+    private double calculateMatchScore(List<StrollWaypoint> waypoints, double targetDist) {
         double estimatedWalkingDist = 0;
-        boolean crossesBridge = false;
 
         for (int i = 0; i < waypoints.size() - 1; i++){
-            StrollWaypoint a = waypoints.get(i);
-            StrollWaypoint b = waypoints.get(i + 1);
-            double d = distance(a, b);
-
+            double d = distance(waypoints.get(i), waypoints.get(i + 1));
             if (d < MIN_POI_DISTANCE) return 0.0;
-
-            if (isCrossingHanRiver(a.getLatitude(), b.getLatitude())) {
-                crossesBridge = true;
-                estimatedWalkingDist += d * BRIDGE_PENALTY_FACTOR;
-            } else {
-                estimatedWalkingDist += d * CIRCUITY_FACTOR;
-            }
+            estimatedWalkingDist += d * CIRCUITY_FACTOR;
         }
 
         /*거리 편차가 적을수록 높은 점수(100점 만점 시스템)*/
 
         double score = 100.0;
-        int requiredTrash = (targetDist >= 5000) ? 3 : (targetDist >= 3000 ? 1 : 0);
-        int requiredFountain = (targetDist >= 5000) ? 1 : 0;
+        score -= (Math.abs(targetDist - estimatedWalkingDist) / 100.0);
 
-        //실제 포함된 POI 수량 파악 (START, END, PIVOT 제외)
-        long trashCount = waypoints.stream().filter(w -> "TRASH_BIN".equals(w.getCategory())).count();
-        long fountainCount = waypoints.stream().filter(w -> "FOUNTAIN".equals(w.getCategory())).count();
-
-        // 1. 시설물 감점 : 1개 부족당 -10점
-        score -= Math.max(0, requiredTrash - trashCount) * 10.0;
-        score -= Math.max(0, requiredFountain - fountainCount) * 10.0;
-
-        // 2. 거리 감점 : 100m 오차당 -1점
-        double distDiff = Math.abs(targetDist - estimatedWalkingDist);
-        score -= (distDiff / 100.0);
-
-        if (targetDist < 10000 && crossesBridge) {
-            return 0.1;
-        }
+        long poiCount = waypoints.stream()
+                .filter(w -> "TRASH_BIN".equals(w.getCategory()) || "FOUNTAIN".equals(w.getCategory()))
+                .count();
+        score += (poiCount * 10.0);
 
         return Math.max(0.1, score);
-
-    }
-
-    private boolean isCrossingHanRiver(double lat1, double lat2) {
-        return (lat1 < HAN_RIVER_LAT_MIN && lat2 > HAN_RIVER_LAT_MAX) ||
-                (lat1 > HAN_RIVER_LAT_MAX && lat2 < HAN_RIVER_LAT_MIN);
     }
 
     private boolean isSafeDistance(List<StrollWaypoint> existing, StrollWaypoint next) {
         if (existing.isEmpty()) return true;
         return distance(existing.get(existing.size() - 1), next) >= MIN_POI_DISTANCE;
-    }
-
-    /**
-     * 모든 후보가 실패 했을 때, 경유지를 최소화하여 생성하는 안전한 풀백 경로.
-     */
-    private Candidate generateSafeFallbackCandidate(StrollRouteRequest request, double startAngle, double endAngle, double targetDist) {
-        double pDist = (targetDist / 2.0) / CIRCUITY_FACTOR;
-        var proj = strollRouteRepository.calculatePivotPoint(request.getLatitude(), request.getLongitude(), pDist, (startAngle + endAngle) / 2.0);
-        List<StrollWaypoint> fallbackWps = List.of(
-                new StrollWaypoint("출발지", "START", request.getLatitude(), request.getLongitude(), 0),
-                new StrollWaypoint("반환점", "PIVOT", proj.getLat(), proj.getLon(), 1),
-                new StrollWaypoint("도착지", "END", request.getLatitude(), request.getLongitude(), 2)
-        );
-
-        return new Candidate(fallbackWps, 0.1);
-
     }
 
     /**
@@ -324,6 +236,19 @@ public class StrollRouteService {
                 .category(w.getCategory())
                 .sequence(w.getSequence())
                 .build()).toList();
+    }
+
+    private StrollRouteResponse rebuildWithFinalName(StrollRouteResponse origin, String finalName) {
+        return StrollRouteResponse.builder()
+                .strollId(origin.getStrollId())
+                .strollName(finalName)
+                .totalDistance(origin.getTotalDistance())
+                .estimatedTime(origin.getEstimatedTime())
+                .matchScore(origin.getMatchScore())
+                .path(origin.getPath())
+                .waypoints(origin.getWaypoints())
+                .navigationGuides(origin.getNavigationGuides())
+                .build();
     }
 
     @lombok.Value
