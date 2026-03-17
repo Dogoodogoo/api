@@ -3,6 +3,7 @@ package com.github.dogoodogoo.api.infra.tmap;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.dogoodogoo.api.domain.stroll.StrollRouteResponse.NavigationGuide;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ public class TmapPedestrianClient {
     private final ObjectMapper objectMapper;
 
     private static final String TMAP_API_URL = "https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1";
+    private static final int TMAP_PASS_LIST_LIMIT = 5;  //TMAP API 경유지 최대 제한 수
 
     public TmapPedestrianClient(@Value("${tmap.api.key}") String apiKey, ObjectMapper objectMapper) {
         this.apiKey = apiKey;
@@ -42,6 +44,7 @@ public class TmapPedestrianClient {
         /*순수 경유지만 추출*/
         List<TmapWaypoint> intermediatePoints = waypointList.stream()
                 .filter(w -> !w.getCategory().equals("START") && !w.getCategory().equals("END"))
+                .limit(TMAP_PASS_LIST_LIMIT)
                 .toList();
 
         /*요청 바디 구성*/
@@ -80,7 +83,7 @@ public class TmapPedestrianClient {
             log.error("TMAP API 서버 에러 (HTTP {}): {}", e.getStatusCode(), e.getResponseBodyAsString());
             return createEmptyResult();
         } catch (Exception e) {
-            log.error("TMAP API 통신 또는 데이터 파싱 중 예상치 못한 오류 발생: {}", e.getMessage());
+            log.error("TMAP API 처리중 예상치 못한 오류: {}", e.getMessage());
             return createEmptyResult();
         }
     }
@@ -100,8 +103,10 @@ public class TmapPedestrianClient {
         JsonNode features = root.path("features");
 
         List<TmapCoordinate> coordinates = new ArrayList<>();
+        List<NavigationGuide> guides = new ArrayList<>();
         double totalDistance = 0;
         int totalTime = 0;
+        boolean bridgeContained = false; //교량 포함 여부 플래그
 
         if (features.isArray() && !features.isEmpty()) {
             /*전체 경로 요약 정보 추출*/
@@ -111,12 +116,35 @@ public class TmapPedestrianClient {
 
             for (JsonNode feature : features) {
                 JsonNode geometry = feature.path("geometry");
-                if ("LineString".equals(geometry.path("type").asText())) {
+                JsonNode props = feature.path("properties");
+                String type = geometry.path("type").asText();
+
+                String facilityType = props.path("facilityType").asText();
+                if ("1".equals(facilityType)) {
+                    bridgeContained = true;
+                }
+
+                if ("LineString".equals(type)) {
                     JsonNode coordsArray = geometry.path("coordinates");
                     for (JsonNode coord : coordsArray) {
                         coordinates.add(TmapCoordinate.builder()
                                 .longitude(coord.get(0).asDouble())
                                 .latitude(coord.get(1).asDouble())
+                                .build());
+                    }
+                }
+
+                else if ("Point".equals(type)) {
+                    int turnType = props.path("turnType").asInt();
+                    JsonNode pointCoords = geometry.path("coordinates");
+
+                    if (turnType > 0 && turnType < 200 && pointCoords.isArray() && pointCoords.size() >= 2) {
+                        guides.add(NavigationGuide.builder()
+                                .pointName(props.path("name").asText())
+                                .description(props.path("description").asText())
+                                .turnType(turnType)
+                                .latitude(pointCoords.get(1).asDouble())
+                                .longitude(pointCoords.get(0).asDouble())
                                 .build());
                     }
                 }
@@ -127,6 +155,8 @@ public class TmapPedestrianClient {
                 .totalDistance(totalDistance)
                 .totalTime(totalTime)
                 .coordinates(coordinates)
+                .navigationGuides(guides)
+                .bridgeContained(bridgeContained)
                 .build();
     }
 
@@ -135,6 +165,8 @@ public class TmapPedestrianClient {
                 .totalDistance(0.0)
                 .totalTime(0)
                 .coordinates(new ArrayList<>())
+                .navigationGuides(new ArrayList<>())
+                .bridgeContained(false)
                 .build();
     }
 
@@ -144,5 +176,7 @@ public class TmapPedestrianClient {
         private final Double totalDistance;
         private final Integer totalTime;
         private final List<TmapCoordinate> coordinates;
+        private final List<NavigationGuide> navigationGuides;
+        private final boolean bridgeContained;
     }
 }
