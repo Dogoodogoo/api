@@ -1,4 +1,4 @@
-name: DogooDogoo API CI/CD
+name: DogooDogoo API CI/CD (Docker)
 
 # develop 브랜치에 코드가 push 될 때 파이프라인이 작동합니다.
 on:
@@ -6,41 +6,41 @@ on:
     branches: [ "develop" ]
 
 jobs:
-  build-and-deploy:
+  # 1. 이미지 빌드 및 푸시 작업 (여기에 적힌 이름이 Job ID입니다)
+  build-and-push:
     runs-on: ubuntu-latest
-
     steps:
-      # 1. GitHub Repository의 코드를 가져옵니다.
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. 프로젝트 스펙에 맞게 Java 21 환경을 세팅합니다.
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      # Docker Buildx 설치 (캐싱 기능을 위해 필수)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Docker Hub 로그인
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 3. Gradle 빌드를 수행합니다. (api 레포지토리 최상위 기준)
-      - name: Build with Gradle
-        run: |
-          chmod +x ./gradlew
-          ./gradlew clean build -x test
-
-      # 4. 빌드된 JAR 파일을 테스트 서버(홈 서버)로 전송합니다.
-      - name: Transfer JAR to Server via SCP
-        uses: appleboy/scp-action@master
+      # [핵심] 도커 이미지 빌드 및 푸시 (GHA 캐시 적용)
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 2025
-          source: "build/libs/*SNAPSHOT.jar"
-          target: "~/app/dogoodogoo"
-          strip_components: 2
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/dogoodogoo:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # 5. 서버에 SSH로 접속하여 기존 앱을 종료하고 새 앱을 백그라운드(nohup)로 실행합니다.
-      - name: Execute Server Run Script
+  # 2. 서버 원격 배포 작업
+  deploy:
+    # [중요] 위의 Job ID와 완벽하게 일치해야 합니다.
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute Remote Deployment via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -48,16 +48,18 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 2025
           script: |
-            cd ~/app/dogoodogoo
+            # 1. 최신 이미지 가져오기
+            docker pull ${{ secrets.DOCKER_USERNAME }}/dogoodogoo:latest
             
-            # 현재 실행 중인 Spring Boot 프로세스 종료 (8080 포트 기준)
-            PID=$(fuser 8080/tcp 2>/dev/null) || true
-            if [ -n "$PID" ]; then
-              echo "기존 프로세스($PID)를 종료합니다."
-              kill -9 $PID
-            fi
+            # 2. 기존 컨테이너 중지 및 제거
+            docker stop dogoo-api || true
+            docker rm dogoo-api || true
             
-            echo "외부 설정 파일(application-secret.yml)을 로드하여 배포를 시작합니다."
+            # 3. 새 컨테이너 실행
+            docker run -d --name dogoo-api \
+              -p 8080:8080 \
+              -v ~/app/dogoodogoo/application-secret.yml:/app/config/application-secret.yml \
+              ${{ secrets.DOCKER_USERNAME }}/dogoodogoo:latest
             
-            # 로그는 develop-app.log에 실시간으로 기록됩니다.
-            nohup java -jar -Dspring.config.import=file:./application-secret.yml $(ls -t *SNAPSHOT.jar | head -1) > develop-app.log 2>&1 &
+            # 4. 이미지 정리
+            docker image prune -f
