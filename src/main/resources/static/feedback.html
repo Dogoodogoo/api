@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>어디가개 : 의견 남기기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; }
+        .score-btn {
+            width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;
+            border: 1px solid #e2e8f0; border-radius: 12px; font-weight: 700; color: #94a3b8; transition: all 0.2s;
+        }
+        .score-btn.active { background-color: #22c55e; color: white; border-color: #22c55e; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3); }
+        .radio-custom:checked + label { border-color: #22c55e; background-color: #f0fdf4; }
+
+        /* 스텝 전환 애니메이션 */
+        .step-content { display: none; }
+        .step-content.active { display: block; animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="flex justify-center items-start min-h-screen">
+
+<div class="w-full max-w-md bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden">
+    <!-- Header -->
+    <header class="p-6 flex items-center gap-4 border-b border-slate-50 shrink-0">
+        <button onclick="history.back()" class="text-slate-400 p-1 hover:bg-slate-50 rounded-full transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+        </button>
+        <h1 class="text-lg font-bold text-slate-800">의견 남기기</h1>
+    </header>
+
+    <main class="flex-1 p-8 overflow-y-auto">
+        <!-- STEP 1: 입력 폼 -->
+        <div id="step-form" class="step-content active space-y-10">
+            <div class="space-y-1">
+                <p class="text-green-600 font-extrabold text-sm uppercase tracking-tight">어디가개 피드백</p>
+                <p class="text-slate-500 text-[13px] leading-relaxed">보내주신 소중한 의견은 더 나은 산책 환경을<br>만드는데 큰 도움이 됩니다.</p>
+            </div>
+
+            <!-- Q1. 만족도 -->
+            <div class="space-y-4">
+                <p class="font-bold text-slate-800 text-sm">1. 만족도는 어떠신가요? <span class="text-green-500">*</span></p>
+                <div class="flex justify-between items-center px-1">
+                    <button type="button" onclick="setScore(1)" class="score-btn">1</button>
+                    <button type="button" onclick="setScore(2)" class="score-btn">2</button>
+                    <button type="button" onclick="setScore(3)" class="score-btn">3</button>
+                    <button type="button" onclick="setScore(4)" class="score-btn">4</button>
+                    <button type="button" onclick="setScore(5)" class="score-btn">5</button>
+                </div>
+                <div class="flex justify-between text-[10px] font-black text-slate-300 uppercase tracking-widest px-1">
+                    <span>매우 아쉬움</span>
+                    <span>매우 만족</span>
+                </div>
+            </div>
+
+            <!-- Q2. 오류 체크 -->
+            <div class="space-y-4">
+                <p class="font-bold text-slate-800 text-sm">2. 이용 중 오류를 경험하셨나요?</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="radio" name="errorRadio" id="err-no" class="radio-custom hidden" checked onchange="toggleError(false)">
+                    <label for="err-no" class="flex flex-col items-center justify-center p-4 border border-slate-100 rounded-2xl cursor-pointer transition-all hover:bg-slate-50">
+                        <span class="text-[13px] font-bold text-slate-600">아니요, 없어요</span>
+                    </label>
+
+                    <input type="radio" name="errorRadio" id="err-yes" class="radio-custom hidden" onchange="toggleError(true)">
+                    <label for="err-yes" class="flex flex-col items-center justify-center p-4 border border-slate-100 rounded-2xl cursor-pointer transition-all hover:bg-slate-50">
+                        <span class="text-[13px] font-bold text-slate-600">네, 있어요</span>
+                    </label>
+                </div>
+                <div id="error-input-area" class="hidden">
+                    <input type="text" id="error-details" placeholder="어떤 점이 불편하셨나요? (선택)"
+                           class="w-full bg-slate-50 border-none rounded-2xl p-4 text-[13px] focus:ring-2 ring-green-100 outline-none">
+                </div>
+            </div>
+
+            <!-- Q3. 자유 의견 -->
+            <div class="space-y-4">
+                <p class="font-bold text-slate-800 text-sm">3. 자유롭게 의견을 남겨주세요</p>
+                <textarea id="feedback-content" placeholder="건의사항이나 응원의 메시지를 남겨주세요"
+                          class="w-full h-32 bg-slate-50 border-none rounded-3xl p-5 text-[13px] focus:ring-2 ring-green-100 outline-none resize-none"></textarea>
+            </div>
+        </div>
+
+        <!-- STEP 2: 성공 화면 (SUCCESS) -->
+        <div id="step-success" class="step-content text-center py-16 space-y-8">
+            <div class="flex justify-center">
+                <div class="w-48 h-48 bg-green-50 rounded-full flex items-center justify-center relative">
+                    <span class="text-8xl">🐶</span>
+                    <div class="absolute -top-1 -right-1 bg-white shadow-xl p-3 rounded-2xl animate-bounce">💖</div>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <p class="text-xl font-black text-slate-800">의견이 전달되었습니다!</p>
+                <p class="text-slate-400 text-sm leading-relaxed">보내주신 소중한 내용은<br>하나하나 꼼꼼히 읽고 반영할게요.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer Buttons -->
+    <footer class="p-6 pb-10 shrink-0">
+        <button id="btn-submit" onclick="submitFeedback()" disabled
+                class="w-full bg-slate-100 text-slate-400 py-5 rounded-[24px] font-black text-base transition-all active:scale-[0.98]">
+            제출하기
+        </button>
+
+        <button id="btn-done" onclick="location.href='/stroll_route.html'"
+                class="hidden w-full bg-[#22c55e] text-white py-5 rounded-[24px] font-black text-base shadow-xl">
+            확인
+        </button>
+    </footer>
+</div>
+
+<script>
+    let currentScore = 0;
+
+    function setScore(score) {
+        currentScore = score;
+        document.querySelectorAll('.score-btn').forEach((b, i) => b.classList.toggle('active', (i+1) === score));
+        checkValidation();
+    }
+
+    function toggleError(show) {
+        document.getElementById('error-input-area').classList.toggle('hidden', !show);
+    }
+
+    function checkValidation() {
+        const btn = document.getElementById('btn-submit');
+        if (currentScore > 0) {
+            btn.disabled = false;
+            btn.classList.replace('bg-slate-100', 'bg-slate-900');
+            btn.classList.replace('text-slate-400', 'text-white');
+        }
+    }
+
+    async function submitFeedback() {
+        const btn = document.getElementById('btn-submit');
+        btn.innerHTML = '처리 중...';
+        btn.disabled = true;
+
+        const payload = {
+            satisfactionScore: currentScore,
+            hasError: document.getElementById('err-yes').checked,
+            errorDetails: document.getElementById('error-details').value,
+            content: document.getElementById('feedback-content').value
+        };
+
+        try {
+            const response = await fetch('/api/v1/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.resultCode === 'SUCCESS') {
+                document.getElementById('step-form').classList.remove('active');
+                document.getElementById('step-success').classList.add('active');
+                btn.classList.add('hidden');
+                document.getElementById('btn-done').classList.remove('hidden');
+            } else {
+                alert("앗! 제출에 실패했어요. 잠시 후 다시 시도해 주세요.");
+                btn.innerHTML = '제출하기';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert("서버와 통신할 수 없습니다.");
+            btn.innerHTML = '제출하기';
+            btn.disabled = false;
+        }
+    }
+</script>
+</body>
+</html>
