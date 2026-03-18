@@ -20,12 +20,12 @@ public class SwaggerConfig {
                 .description("반려견 산책 경로 추천 및 주변 공간 시설(PostGIS) 조회 API")
                 .version("v1.0.0")
                 .contact(new Contact()
-                        .name("JhinsLog")
+                        .name("어디가개 API GitHub")
                         .url("https://github.com/Dogoodogoo/api/tree/develop"));
 
         Server devServer = new Server()
                 .url("http://jhin.iptime.org:8080")
-                .description("개발 서버");
+                .description("Dev Server");
 
         return new OpenAPI()
                 .info(info)
