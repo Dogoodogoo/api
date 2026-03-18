@@ -12,7 +12,7 @@ COPY src ./src
 RUN gradle clean build -x test --parallel --no-daemon
 
 # 2단계: 실행 환경 (경량화 배포용 이미지)
-FROM openjdk:21-slim
+FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 
 # 빌드 단계에서 생성된 실행 가능한 JAR 파일만 추출하여 이미지 용량을 최소화합니다.
