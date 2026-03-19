@@ -35,7 +35,7 @@ public class StrollRouteController {
     })
     @PostMapping("/route/recommend")
     public ResponseEntity<List<StrollRouteResponse>> recommendRoute(@Valid @RequestBody StrollRouteRequest request) {
-        log.info("[Stroll] 경로 추천 요청 수신 - 위치:({}, {}), 체급:{}, 시간: {}분, 거리: {}km",
+        log.info("[경로] 생성 요청 수신 - 위치:({}, {}), 체급:{}, 시간: {}분, 거리: {}km",
                 request.getLatitude(),
                 request.getLongitude(),
                 request.getDogSize(),
