@@ -11,7 +11,7 @@ public class FeedbackService {
 
     private final FeedbackRepository feedbackRepository;
 
-    public FeedbackDto.Response saveFeedback(FeedbackDto.CreateRequest request) {
+    public FeedbackDto.FeedbackResponse saveFeedback(FeedbackDto.FeedbackCreateRequest request) {
         try {
             Feedback feedback = Feedback.builder()
                     .satisfactionScore(request.getSatisfactionScore())
@@ -23,13 +23,13 @@ public class FeedbackService {
             Feedback saved = feedbackRepository.save(feedback);
             log.info("[Feedback] 신규 의견 수신됨 - ID: {} ({}점)", saved.getId(), saved.getSatisfactionScore());
 
-            return FeedbackDto.Response.builder()
+            return FeedbackDto.FeedbackResponse.builder()
                     .resultCode(FeedbackDto.ResultCode.SUCCESS)
                     .feedbackId(saved.getId())
                     .build();
         } catch (Exception e) {
             log.error("[Feedback] 저장 중 오류 발생 : ", e);
-            return FeedbackDto.Response.builder()
+            return FeedbackDto.FeedbackResponse.builder()
                     .resultCode(FeedbackDto.ResultCode.FAIL_SERVER)
                     .build();
         }

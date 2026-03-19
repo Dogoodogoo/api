@@ -32,9 +32,12 @@ public class StrollRouteService {
     private final TmapPedestrianClient tmapPedestrianClient;
 
     private static final double CIRCUITY_FACTOR = 1.35;         // 서울 도심 도보 굴곡률 기준(1.3 ~ 1.5)
-    private static final int POPULATION_SIZE = 100;             // 섹터당 시뮬레이션 후보 경로 수(유전 알고리즘 개체 수)
+    private static final int POPULATION_SIZE = 50;              // 섹터당 시뮬레이션 후보 경로 수(유전 알고리즘 개체 수)
     private static final double MIN_POI_DISTANCE = 110.0;       // Tmap API 에러 방지를 위한 최소 지점 간격(m)
-    private static final double ERROR_THRESHOLD = 0.1;          // 20% 오차 허용 임계값
+    //private static final double ERROR_THRESHOLD = 0.1;          // 10% 오차 허용 임계값
+    private static final double DEFAULT_ERROR_THRESHOLD = 0.10; // 10% 오차 허용 임계값
+    private static final double MID_ERROR_THRESHOLD = 0.15;     // 15% 오차 허용 임계값
+    private static final double MAX_ERROR_THRESHOLD = 0.20;     // 20% 오차 허용 임계값
     private static final double TRASH_BIN_MIN_SPACING = 500.0;  // 쓰레기통 간 최소 간격
     private static final int MAX_GLOBAL_ATTEMPTS = 15;          // 최대 재시도 횟수
 
@@ -45,24 +48,34 @@ public class StrollRouteService {
 
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
 
-            var f1 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 0, 120, targetDist), executor);
-            var f2 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 120, 240, targetDist), executor);
-            var f3 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 240, 360, targetDist), executor);
+            // 1. 섹터별로 오차율 10% 이내 경로 찾기
+            var f1 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 0, 120, targetDist, DEFAULT_ERROR_THRESHOLD), executor);
+            var f2 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 120, 240, targetDist, DEFAULT_ERROR_THRESHOLD), executor);
+            var f3 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 240, 360, targetDist, DEFAULT_ERROR_THRESHOLD), executor);
 
-            Stream.of(f1.join(), f2.join(), f3.join())
-                    .filter(Objects::nonNull)
-                    .forEach(finalResults::add);
+            Stream.of(f1.join(), f2.join(), f3.join()).filter(Objects::nonNull).forEach(finalResults::add);
 
+            // 2. 결과가 3개 미만일 경우 오차율 15% 이내 경로 찾기
             int attempts = 0;
             while (finalResults.size() < 3 && attempts < MAX_GLOBAL_ATTEMPTS) {
                 attempts++;
                 double nextAngle = ThreadLocalRandom.current().nextDouble(0, 360);
-                StrollRouteResponse extra = evolveBestPath(request, nextAngle, nextAngle + 120, targetDist);
-                if (extra != null) {
-                    finalResults.add(extra);
+                StrollRouteResponse extra = evolveBestPath(request, nextAngle, nextAngle + 120, targetDist, MID_ERROR_THRESHOLD);
+                if (extra != null) finalResults.add(extra);
+            }
+
+            // 3. 결과가 3개 미만일 경우 오차율 20% 이내 경로 찾기
+            while (finalResults.size() < 3) {
+                double desperateAngle = ThreadLocalRandom.current().nextDouble(0, 360);
+                StrollRouteResponse lastResort = evolveBestPath(request, desperateAngle, desperateAngle + 120, targetDist, MAX_ERROR_THRESHOLD);
+                if (lastResort != null) {
+                    finalResults.add(lastResort);
+                } else {
+                    break;
                 }
             }
         }
+
         List<StrollRouteResponse> limitedResults = finalResults.stream()
                 .limit(3)
                 .collect(Collectors.toList());
@@ -77,7 +90,7 @@ public class StrollRouteService {
     /**
      * 특정 섹터 내에서 가장 적합도가 높은 경로를 선택하여 Tmap API로 최종 확정합니다.
      */
-    private StrollRouteResponse evolveBestPath(StrollRouteRequest request, double startAngle, double endAngle, double targetDist) {
+    private StrollRouteResponse evolveBestPath(StrollRouteRequest request, double startAngle, double endAngle, double targetDist, double threshold) {
 
         Candidate elite = IntStream.range(0, POPULATION_SIZE)
                 .mapToObj(i -> simulateCandidate(request, startAngle, endAngle, targetDist))
@@ -91,9 +104,11 @@ public class StrollRouteService {
         );
 
         double actualDist = tmapResult.getTotalDistance();
+        double errorRatio = Math.abs(targetDist - actualDist) / targetDist;
 //        double finalScore = elite.getMatchScore();
-        if (actualDist <= 0 || (Math.abs(targetDist - actualDist) / targetDist) > ERROR_THRESHOLD) {
-            log.warn("[경로] 최종 실측 결과 10% 오차 초과로 폐기");
+        if (actualDist <= 0 || errorRatio > threshold) {
+            log.warn("[경로] 오차율 {}% 초과 폐기 (기준: {}%, 실측: {}m",
+                    Math.round(errorRatio * 100), Math.round(threshold * 100), Math.round(actualDist));
             return null;
         }
 

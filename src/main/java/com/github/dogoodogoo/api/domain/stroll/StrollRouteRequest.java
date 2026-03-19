@@ -1,6 +1,8 @@
 package com.github.dogoodogoo.api.domain.stroll;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -9,45 +11,45 @@ import lombok.Setter;
 @Schema(description = "산책 경로 추천 요청 정보")
 public class StrollRouteRequest {
 
-    @Schema(description = "현재 위치 위도", example = "37.5172")
+    @NotNull
+    @Schema(description = "현재 위치 위도", example = "37.5172", requiredMode = Schema.RequiredMode.REQUIRED)
     private Double latitude;
 
-    @Schema(description = "현재 위치 경도", example = "127.0473")
+    @NotNull
+    @Schema(description = "현재 위치 경도", example = "127.0473", requiredMode = Schema.RequiredMode.REQUIRED)
     private Double longitude;
 
     // 필수 정보 : 체급 & 나이는 동시에 입력.
-    @Schema(description = "반려견 체급 (SMALL, MEDIUM, LARGE", example = "MEDIUM")
+    @NotNull
+    @Schema(description = "반려견 체급 (SMALL, MEDIUM, LARGE)", example = "MEDIUM", requiredMode = Schema.RequiredMode.REQUIRED)
     private StrollDogSize dogSize;
 
-    @Schema(description = "반려견 나이(숫자)", example = "5")
+    @NotNull
+    @Schema(description = "반려견 나이(개월 수 단위)", example = "60", requiredMode = Schema.RequiredMode.REQUIRED)
     private Integer dogAge;
 
-    @Schema(description = "나이 단위(YEAR: 살, MONTH: 개월)", example = "YEAR")
-    private String dogAgeUnit;  // "YEAR" or "MONTH"
-
     // 선택 정보 : 산책 시간 & 거리(km)
-    @Schema(description = "희망 산책 시간(분)", example = "30", nullable = true)
+    @Schema(description = "희망 산책 시간(분 단위)", example = "30", nullable = true)
     private Integer walkingTime;
 
-    @Schema(description = "희망 산책 거리(km)", example = "1.5", nullable = true)
+    @Schema(description = "희망 산책 거리(km 단위)", example = "1.5", nullable = true)
     private Double walkingDistance;
 
     private static final double EPSILON = 1e-6; // Double 비교시 부동 소수점 오차를 고려한 임계값
 
+    @JsonIgnore
+    @Schema(hidden = true)
     public double getNormalizedAge() {
         if (dogAge == null) return 0.0;
-        if ("MONTH".equalsIgnoreCase(dogAgeUnit)) {
-            return dogAge / 12.0;
-        }
-        return dogAge.doubleValue();
+        return dogAge / 12.0;
     }
-
 
     /**
      * 사용자가 입력한 데이터를 기반하여, 최적의 목표 산책 거리를 산출합니다.
      */
+    @JsonIgnore
+    @Schema(hidden = true)
     public double getTargetDistanceInMeters() {
-
         // 1. 거리 입력시 최우선 반영
         if (walkingDistance != null && walkingDistance > EPSILON) {
             return walkingDistance * 1000.0;
@@ -60,7 +62,10 @@ public class StrollRouteRequest {
         return calculateDefaultDistanceByPolicy();
     }
 
+
     /*필수 정보 입력 여부 파악*/
+    @JsonIgnore
+    @Schema(hidden = true)
     public boolean isInvalidDogInfo() {
         return (dogSize == null || dogAge == null);
     }
@@ -130,8 +135,10 @@ public class StrollRouteRequest {
     /**
      *  시간과 거리가 동시입력 여부를 확인합니다.
      */
+    @JsonIgnore
+    @Schema(hidden = true)
     public boolean hasConflictingInput() {
-        return (walkingDistance != null && walkingDistance > 0) &&
+        return (walkingDistance != null && walkingDistance > EPSILON) &&
                 (walkingTime != null && walkingTime > 0);
     }
 }
