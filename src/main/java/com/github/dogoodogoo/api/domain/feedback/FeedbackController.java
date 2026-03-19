@@ -23,7 +23,7 @@ public class FeedbackController {
 
     @Operation(summary = "의견 제출", description = "사용자의 만족도 점수와 의견을 DB에 저장합니다.")
     @PostMapping
-    public ResponseEntity<FeedbackDto.Response> submitFeedback(@Valid @RequestBody FeedbackDto.CreateRequest request) {
+    public ResponseEntity<FeedbackDto.FeedbackResponse> submitFeedback(@Valid @RequestBody FeedbackDto.FeedbackCreateRequest request) {
         return ResponseEntity.ok(feedbackService.saveFeedback(request));
     }
 }
