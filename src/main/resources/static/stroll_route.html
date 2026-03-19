@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>도구도구 : 지능형 산책로 시뮬레이터 v6.7</title>
+    <title>어디가개 : 산책로 추천 v6.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=nxnux3f3r1&submodules=geocoder"></script>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
@@ -29,8 +29,8 @@
     <div class="flex items-center gap-3">
         <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg"><span class="text-xl">🐕</span></div>
         <div>
-            <h1 class="text-lg font-black text-slate-800 italic uppercase leading-none">DogooDogoo</h1>
-            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">POI Markers Restored v6.7</p>
+            <h1 class="text-lg font-black text-slate-800 italic uppercase leading-none">어디가개</h1>
+            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Error Guard v6.8</p>
         </div>
     </div>
 </nav>
@@ -151,9 +151,11 @@
     function adjustOfDist(val) { walkDist = Math.max(0, parseFloat((walkDist + val).toFixed(1))); document.getElementById('display-dist').innerText = `${walkDist}km`; }
 
     async function requestSmartRoutes() {
-        const ageVal = parseInt(document.getElementById('age-input').value || 0);
-        if (ageVal <= 0) { alert("반려견 나이를 입력해주세요."); return; }
+        const ageInputEl = document.getElementById('age-input');
+        const ageVal = parseInt(ageInputEl.value || 0);
+        if (ageVal <= 0) { alert("반려견 나이를 정확히 입력해주세요."); return; }
 
+        // [나이 환산] 년 단위 선택 시 12를 곱해 개월 수로 변환
         const totalMonths = (selectedAgeUnit === 'YEAR') ? ageVal * 12 : ageVal;
 
         document.getElementById('map-loader-overlay').classList.add('show');
@@ -170,10 +172,28 @@
                     walkingTime: walkTime > 0 ? walkTime : null
                 })
             });
+
+            // [추가] 204 No Content(경로 없음) 처리
+            if (response.status === 204) {
+                alert("조건에 맞는 산책로를 찾을 수 없습니다. 반환점 부근의 시설물이 부족하거나 도로 상황이 좋지 않을 수 있습니다.");
+                return;
+            }
+
+            if (!response.ok) throw new Error("API 응답 실패");
+
             recommendedRoutes = await response.json();
+
+            if (!recommendedRoutes || recommendedRoutes.length === 0) {
+                alert("추천된 경로가 없습니다.");
+                return;
+            }
+
             renderRouteResults();
             toggleResultMode(true);
-        } catch (e) { alert("경로 생성 중 오류 발생"); }
+        } catch (e) {
+            console.error(e);
+            alert("경로 생성 중 기술적인 오류가 발생했습니다.");
+        }
         finally { document.getElementById('map-loader-overlay').classList.remove('show'); }
     }
 
@@ -181,7 +201,6 @@
         const container = document.getElementById('route-cards-container');
         container.innerHTML = '';
         polylines.forEach(p => p.setMap(null)); polylines = [];
-        // 마커 초기화
         poiMarkers.forEach(m => m.setMap(null)); poiMarkers = [];
 
         recommendedRoutes.forEach((route, idx) => {
@@ -205,7 +224,6 @@
         document.querySelectorAll('.route-card').forEach((c, i) => i === idx ? c.classList.add('active') : c.classList.remove('active'));
         polylines.forEach((p, i) => p.setOptions({ strokeColor: i === idx ? '#22c55e' : '#cbd5e1', zIndex: i === idx ? 100 : 10 }));
 
-        // [추가] 선택된 경로의 POI 마커 렌더링
         poiMarkers.forEach(m => m.setMap(null)); poiMarkers = [];
         const route = recommendedRoutes[idx];
 
