@@ -34,57 +34,64 @@ public class StrollRouteService {
     private static final double CIRCUITY_FACTOR = 1.35;         // 서울 도심 도보 굴곡률 기준(1.3 ~ 1.5)
     private static final int POPULATION_SIZE = 50;              // 섹터당 시뮬레이션 후보 경로 수(유전 알고리즘 개체 수)
     private static final double MIN_POI_DISTANCE = 110.0;       // Tmap API 에러 방지를 위한 최소 지점 간격(m)
-    //private static final double ERROR_THRESHOLD = 0.1;          // 10% 오차 허용 임계값
-    private static final double DEFAULT_ERROR_THRESHOLD = 0.10; // 10% 오차 허용 임계값
-    private static final double MID_ERROR_THRESHOLD = 0.15;     // 15% 오차 허용 임계값
-    private static final double MAX_ERROR_THRESHOLD = 0.20;     // 20% 오차 허용 임계값
+
     private static final double TRASH_BIN_MIN_SPACING = 500.0;  // 쓰레기통 간 최소 간격
-    private static final int MAX_GLOBAL_ATTEMPTS = 15;          // 최대 재시도 횟수
+    private static final double INITIAL_THRESHOLD = 0.15;       // 초기 허용 오차 (15%)
+    private static final double THRESHOLD_INCREMENT = 0.05;     // 10회 실패마다 오차 완화량 (+5%)
+    private static final int MAX_GLOBAL_ATTEMPTS = 50;          // 최대 재시도 횟수
+    private static final int MIN_REQUIRED_ROUTE = 3;            // 최소 확보 경로 수
+
+    private static final double W_DISTANCE = 0.4;               // 거리별 가산점
+    private static final double W_FACILITY = 0.6;               // 시설물 가산점
+
+    //    private static final double DEFAULT_ERROR_THRESHOLD = 0.10; // 10% 오차 허용 임계값
+//    private static final double MID_ERROR_THRESHOLD = 0.15;     // 15% 오차 허용 임계값
+//    private static final double MAX_ERROR_THRESHOLD = 0.20;     // 20% 오차 허용 임계값
 
     public List<StrollRouteResponse> createStrollRoutes(StrollRouteRequest request) {
         double targetDist = request.getTargetDistanceInMeters();
         List<StrollRouteResponse> finalResults = new ArrayList<>();
-//        int totalAttempted = 0;
+        double currentThreshold = INITIAL_THRESHOLD;
+        int totalAttempts = 0;
 
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
 
             // 1. 섹터별로 오차율 10% 이내 경로 찾기
-            var f1 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 0, 120, targetDist, DEFAULT_ERROR_THRESHOLD), executor);
-            var f2 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 120, 240, targetDist, DEFAULT_ERROR_THRESHOLD), executor);
-            var f3 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 240, 360, targetDist, DEFAULT_ERROR_THRESHOLD), executor);
+            var f1 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 0, 120, targetDist, INITIAL_THRESHOLD), executor);
+            var f2 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 120, 240, targetDist, INITIAL_THRESHOLD), executor);
+            var f3 = CompletableFuture.supplyAsync(() -> evolveBestPath(request, 240, 360, targetDist, INITIAL_THRESHOLD), executor);
 
             Stream.of(f1.join(), f2.join(), f3.join()).filter(Objects::nonNull).forEach(finalResults::add);
+            totalAttempts += 3;
 
             // 2. 결과가 3개 미만일 경우 오차율 15% 이내 경로 찾기
-            int attempts = 0;
-            while (finalResults.size() < 3 && attempts < MAX_GLOBAL_ATTEMPTS) {
-                attempts++;
-                double nextAngle = ThreadLocalRandom.current().nextDouble(0, 360);
-                StrollRouteResponse extra = evolveBestPath(request, nextAngle, nextAngle + 120, targetDist, MID_ERROR_THRESHOLD);
-                if (extra != null) finalResults.add(extra);
-            }
+            while (finalResults.size() < MIN_REQUIRED_ROUTE && totalAttempts < MAX_GLOBAL_ATTEMPTS) {
+                totalAttempts++;
 
-            // 3. 결과가 3개 미만일 경우 오차율 20% 이내 경로 찾기
-            while (finalResults.size() < 3) {
-                double desperateAngle = ThreadLocalRandom.current().nextDouble(0, 360);
-                StrollRouteResponse lastResort = evolveBestPath(request, desperateAngle, desperateAngle + 120, targetDist, MAX_ERROR_THRESHOLD);
-                if (lastResort != null) {
-                    finalResults.add(lastResort);
-                } else {
-                    break;
+                if (totalAttempts > 0 && totalAttempts % 10 == 0) {
+                    currentThreshold += THRESHOLD_INCREMENT;
+                    log.warn("[산책 경로] 유효 경로 부족으로 임계치 완화 -> {}%", (int)(currentThreshold * 100));
+                }
+
+                double randomAngle = ThreadLocalRandom.current().nextDouble(0, 360);
+                StrollRouteResponse extra = evolveBestPath(request, randomAngle, randomAngle + 120, targetDist, currentThreshold);
+
+                if (extra != null) {
+                    finalResults.add(extra);
                 }
             }
         }
 
-        List<StrollRouteResponse> limitedResults = finalResults.stream()
-                .limit(3)
+        List<StrollRouteResponse> sortedResults = finalResults.stream()
+                .sorted(Comparator.comparingDouble(StrollRouteResponse::getMatchScore).reversed())
+                .limit(MIN_REQUIRED_ROUTE)
                 .collect(Collectors.toList());
 
-        for (int i = 0; i < limitedResults.size(); i++) {
-            limitedResults.set(i, rebuildWithFinalName(limitedResults.get(i), "추천 산책로" + (i + 1)));
+        for (int i = 0; i < sortedResults.size(); i++) {
+            sortedResults.set(i, rebuildWithFinalName(sortedResults.get(i), "추천 산책로 " + (i + 1)));
         }
-
-        return limitedResults;
+        log.info("[산책 경로] 최종 추천 완료: {}건 확보 (총 시도: {}회)", sortedResults.size(), totalAttempts);
+        return sortedResults;
     }
 
     /**
@@ -106,8 +113,13 @@ public class StrollRouteService {
         double actualDist = tmapResult.getTotalDistance();
         double errorRatio = Math.abs(targetDist - actualDist) / targetDist;
 //        double finalScore = elite.getMatchScore();
-        if (actualDist <= 0 || errorRatio > threshold) {
-            log.warn("[경로] 오차율 {}% 초과 폐기 (기준: {}%, 실측: {}m",
+
+        double facilityScoreNormalized = calculateFacilityScoreOnly(elite.getWaypoints());
+
+        double adaptiveThreshold = (facilityScoreNormalized > 0.8) ? threshold + 0.1 : threshold;
+
+        if (errorRatio > adaptiveThreshold) {
+            log.warn("[경로] 오차율 {}% 초과 폐기 (기준: {}%, 실측: {}m)",
                     Math.round(errorRatio * 100), Math.round(threshold * 100), Math.round(actualDist));
             return null;
         }
@@ -134,28 +146,22 @@ public class StrollRouteService {
 
         double variation = random.nextDouble(0.25, 0.35);
         double pivotDist = (targetDist / 2.0) * variation;
-
         double midAngle = (startAngle + endAngle) / 2.0;
+
         StrollRouteRepositoryCustom.PointProjection pivotProj = strollRouteRepository.calculatePivotPoint(
                 request.getLatitude(), request.getLongitude(), pivotDist, midAngle);
-
-        // 가는길, 오는길 구역 구분
-        double subSector1_Start = startAngle;
-        double subSector1_End = midAngle;
-        double subSector2_Start = midAngle;
-        double subSector2_End = endAngle;
 
         // 모든 시설물을 '가는 길' 과 '오는 길'로 분산 배치
         List<StrollWaypoint> outboundWaypoints = new ArrayList<>();  // 가는 길(Start -> pivot)
         List<StrollWaypoint> inboundWaypoints = new ArrayList<>();   // 오는 길(pivot -> End)
         StrollWaypoint startWp = new StrollWaypoint("출발지", "START", request.getLatitude(), request.getLongitude(), 0);
 
-        if (targetDist >= 5000 && targetDist <= 10000) {
-            findTrashBins(request, pivotDist, subSector1_Start, subSector1_End, 3)
+        if (targetDist >= 500) {
+            findTrashBins(request, pivotDist, startAngle, midAngle, 3)
                     .stream().filter(b -> distance(startWp, b) >= MIN_POI_DISTANCE)
                     .findAny().ifPresent(outboundWaypoints::add);
 
-            List<StrollWaypoint> binPool = findTrashBins(request, pivotDist, subSector2_Start, subSector2_End, 10);
+            List<StrollWaypoint> binPool = findTrashBins(request, pivotDist, midAngle, endAngle, 10);
             for (StrollWaypoint bin : binPool) {
                 if (inboundWaypoints.size() >= 2) break;
                 if (isSafeFromAll(outboundWaypoints, bin, TRASH_BIN_MIN_SPACING) &&
@@ -205,13 +211,27 @@ public class StrollRouteService {
         }
 
         double predictedDist = totalStraightDist * CIRCUITY_FACTOR;
-        double distanceScore = 100.0 / (1.0 + Math.abs(targetDist - predictedDist));
+        double errorRatio = Math.abs(targetDist - predictedDist) / targetDist;
 
-        long poiCount = waypoints.stream()
-                .filter(w -> "TRASH_BIN".equals(w.getCategory()) || "FOUNTAIN".equals(w.getCategory()))
-                .count();
+        //거리 점수 (0~100)
+        double distanceScore = 100.0 / (1.0 + errorRatio * 10);
 
-        return distanceScore + (poiCount * 20.0);
+        //시설물 점수 (0~100)
+        double facilityScore = calculateFacilityScoreOnly(waypoints) * 100;
+
+        return (W_DISTANCE * distanceScore) + (W_FACILITY * facilityScore);
+    }
+
+    private double calculateFacilityScoreOnly(List<StrollWaypoint> waypoints) {
+        long trashCount = waypoints.stream().filter(w -> "TRASH_BIN".equals(w.getCategory())).count();
+        long fountainCount = waypoints.stream().filter(w -> "FOUNTAIN".equals(w.getCategory())).count();
+
+        double score = 0.0;
+        if (trashCount >= 1) score += 0.4;
+        if (trashCount >= 2) score += 0.2;
+        if (fountainCount >= 1) score += 0.4;
+
+        return Math.min(1.0, score);
     }
 
     /**
