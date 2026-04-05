@@ -2,6 +2,8 @@ package com.github.dogoodogoo.api.domain.fountain;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.locationtech.jts.geom.Point;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -25,9 +27,18 @@ public class Fountain {
 
     private Double longitude;
 
+    @Column(columnDefinition = "geometry(Point, 4326)")
+    private Point geom;
+
     @Column(name = "managed_by")
     private String managedBy;
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    @PreUpdate
+    public void updateTimestamp() {
+        this.updatedAt = LocalDateTime.now();
+    }
 }
