@@ -13,12 +13,15 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
+        highlight_sql: false
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
 logging:
   level:
+    org.hibernate.sql: info
+    org.hibernate.orm.results: info
     com.github.dogoodogoo.api: debug

@@ -6,6 +6,7 @@ import lombok.Getter;
 @Getter
 @Builder
 public class TrashBinResponse {
+    private Long id;
     private String cityName;
     private String address;
     private String locationDesc;

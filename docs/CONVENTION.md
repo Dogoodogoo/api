@@ -40,6 +40,6 @@ Git의 커밋 히스토리는 **방향성 비순환 그래프(Directed Acyclic G
 
 ## 🛡️ 3. 보안 및 법적 준수 사항 (Security First)
 
-세이핀님(PL)의 가이드에 따라 다음 수칙을 최우선으로 합니다.
+가이드에 따라 다음 수칙을 최우선으로 합니다.
 
 1. **Secret 정보 격리**: `application-secret.yml`, `.env` 등 민감 정보

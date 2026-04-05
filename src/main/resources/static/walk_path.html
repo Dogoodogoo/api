@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>도구도구 : 3종 산책 경로 시뮬레이터</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=nxnux3f3r1&submodules=geocoder"></script>
+    <script type="text/javascript" src="https://navermaps.github.io/maps.js.ncp/docs/js/marker-clusterer.js"></script>
+    <style>
+        #map { width: 100%; height: 100%; transition: all 0.3s ease; }
+        .path-card.active { border-color: #4f46e5; background-color: #f8fafc; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .loading-overlay { backdrop-filter: blur(4px); z-index: 9999; }
+        #toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); z-index: 10000; transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        #toast.show { top: 24px; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-900 h-screen flex flex-col overflow-hidden">
+
+<!-- 알림 메시지 (Toast) -->
+<div id="toast" class="bg-slate-900 text-white px-8 py-4 rounded-3xl shadow-2xl flex items-center gap-3 border border-slate-700">
+    <div class="p-1 bg-red-500 rounded-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" /></svg>
+    </div>
+    <span id="toast-message" class="text-sm font-black">설정값을 입력해주세요.</span>
+</div>
+
+<!-- 로딩 오버레이 -->
+<div id="loading" class="hidden fixed inset-0 loading-overlay bg-white/70 flex flex-col items-center justify-center">
+    <div class="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+    <p class="font-black text-indigo-600 animate-pulse">최적의 산책 경로를 연산 중입니다...</p>
+</div>
+
+<nav class="bg-white border-b border-slate-200 p-4 h-[80px] flex-none z-10 shadow-sm">
+    <div class="max-w-screen-2xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="p-2 bg-indigo-600 rounded-xl text-white shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A2 2 0 013 15.382V7.618a2 2 0 011.106-1.789L9 3m0 17l9.927-4.963A2 2 0 0020 13.268V5.366a2 2 0 00-1.106-1.789L9 8.541m0 11.459L9 8.541" /></svg></div>
+            <div>
+                <h1 class="text-xl font-black text-slate-800 tracking-tight italic">DOGOO DOGOO</h1>
+                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">3-Path Engine v2.9</p>
+            </div>
+        </div>
+        <div class="hidden md:flex items-center gap-6 text-xs font-bold text-slate-400">
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-red-500"></span>출발지</span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-indigo-600"></span>쓰레기통</span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-sky-400"></span>음수대</span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400"></span>반환점</span>
+        </div>
+    </div>
+</nav>
+
+<main class="flex-1 flex overflow-hidden">
+    <aside class="w-[380px] bg-white border-r border-slate-200 flex flex-col shadow-xl z-20">
+        <div class="p-6 space-y-6 overflow-y-auto flex-1">
+            <section class="space-y-4">
+                <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest">산책 조건 설정</h2>
+                <div class="grid grid-cols-1 gap-3">
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-500 ml-1">1. 반려견 체급 (선택)</label>
+                        <select id="dog-size" class="w-full bg-slate-50 border-2 border-slate-100 p-3 rounded-2xl font-bold outline-none focus:border-indigo-500 transition-all text-sm">
+                            <option value="">선택 안 함 (직접 입력 우선)</option>
+                            <option value="SMALL">소형견 (1~3km)</option>
+                            <option value="MEDIUM">중형견 (3~5km)</option>
+                            <option value="LARGE">대형견 (5~10km)</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-bold text-slate-500 ml-1">2. 희망 거리 (km)</label>
+                            <input type="number" id="walk-dist" step="0.5" placeholder="예: 3.5" class="w-full bg-slate-50 border-2 border-slate-100 p-3 rounded-2xl font-bold outline-none focus:border-indigo-500 transition-all text-sm">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-bold text-slate-500 ml-1">3. 희망 시간 (분)</label>
+                            <input type="number" id="walk-time" step="10" placeholder="예: 40" class="w-full bg-slate-50 border-2 border-slate-100 p-3 rounded-2xl font-bold outline-none focus:border-indigo-500 transition-all text-sm">
+                        </div>
+                    </div>
+                </div>
+                <button onclick="fetchRecommendedPaths()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-600 transition-all active:scale-[0.98]">추천 경로 생성</button>
+                <p class="text-[10px] text-slate-400 text-center font-medium leading-relaxed italic">거리는 km 단위, 시간은 분 단위로 입력하세요.<br>(시간 입력 시 분당 60m 기준으로 자동 계산)</p>
+            </section>
+            <hr class="border-slate-100">
+            <section class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest">추천 결과</h2>
+                    <span id="result-count" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">0 코스</span>
+                </div>
+                <div id="path-list" class="space-y-3">
+                    <div class="text-center py-10 opacity-40"><p class="text-xs font-bold text-slate-400">조건을 설정하고<br>지도를 클릭해주세요.</p></div>
+                </div>
+            </section>
+        </div>
+    </aside>
+
+    <section class="flex-1 relative bg-slate-100">
+        <div id="map"></div>
+        <div class="absolute top-6 left-1/2 -translate-x-1/2 px-6 py-3 bg-white/90 backdrop-blur rounded-full shadow-2xl border border-white flex items-center gap-3 pointer-events-none transition-all duration-500" id="position-badge">
+            <div class="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
+            <span class="text-xs font-black text-slate-700">시작 위치: <span id="current-coord" class="text-indigo-600 font-black">지도 클릭 대기 중</span></span>
+        </div>
+    </section>
+</main>
+
+<script>
+    let map, startMarker, infoWindow, hasClicked = false;
+    let currentCoords = { lat: 37.5172, lon: 127.0473 };
+    let pathResults = [], polylines = [], poiMarkers = [];
+
+    window.onload = function() {
+        const mapOptions = { center: new naver.maps.LatLng(currentCoords.lat, currentCoords.lon), zoom: 15, zoomControl: true, zoomControlOptions: { position: naver.maps.Position.RIGHT_CENTER } };
+        map = new naver.maps.Map('map', mapOptions);
+        infoWindow = new naver.maps.InfoWindow({ borderWidth: 0, backgroundColor: "transparent", disableAnchor: true });
+        startMarker = new naver.maps.Marker({ position: map.getCenter(), map: map, icon: { content: '<div class="w-8 h-8 bg-red-500 border-4 border-white rounded-full shadow-2xl flex items-center justify-center text-white font-black text-[10px]">IN</div>', anchor: new naver.maps.Point(16, 16) }, zIndex: 100 });
+        naver.maps.Event.addListener(map, 'click', function(e) {
+            hasClicked = true;
+            currentCoords.lat = e.coord.lat(); currentCoords.lon = e.coord.lng();
+            startMarker.setPosition(e.coord);
+            document.getElementById('current-coord').innerText = `${currentCoords.lat.toFixed(4)}, ${currentCoords.lon.toFixed(4)}`;
+            clearDisplay(false);
+        });
+    };
+
+    function showToast(message) {
+        const toast = document.getElementById('toast');
+        const msgSpan = document.getElementById('toast-message');
+        msgSpan.innerText = message;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    async function fetchRecommendedPaths() {
+        const dogSize = document.getElementById('dog-size').value;
+        const walkDist = document.getElementById('walk-dist').value;
+        const walkTime = document.getElementById('walk-time').value;
+
+        if (!hasClicked) { showToast("지도에서 시작 지점을 먼저 클릭해주세요."); return; }
+
+        // [수정] 세 가지 조건 중 최소 하나라도 입력했는지 확인
+        if (!dogSize && !walkDist && !walkTime) {
+            showToast("체급 선택, 희망 거리 또는 시간 중 하나를 입력해야 합니다.");
+            return;
+        }
+
+        const loader = document.getElementById('loading');
+        loader.classList.remove('hidden');
+
+        try {
+            const response = await fetch('/api/v1/walk/recommend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    latitude: currentCoords.lat,
+                    longitude: currentCoords.lon,
+                    dogSize: dogSize || null,
+                    walkingDistance: walkDist ? parseFloat(walkDist) : null,
+                    walkingTime: walkTime ? parseInt(walkTime) : null // [추가] 산책 시간 데이터 전송
+                })
+            });
+
+            if (!response.ok) throw new Error("API 요청 실패");
+            pathResults = await response.json();
+            renderPathList(); visualizeAllPaths();
+        } catch (error) {
+            showToast("데이터 호출 중 오류가 발생했습니다.");
+        } finally { loader.classList.add('hidden'); }
+    }
+
+    function renderPathList() {
+        const listContainer = document.getElementById('path-list');
+        const countSpan = document.getElementById('result-count');
+        listContainer.innerHTML = '';
+        countSpan.innerText = `${pathResults.length} 코스`;
+        const colors = ['border-indigo-500', 'border-emerald-500', 'border-amber-500'];
+        pathResults.forEach((route, index) => {
+            const card = document.createElement('div');
+            card.className = `path-card p-5 bg-white border-l-8 rounded-2xl shadow-sm cursor-pointer transition-all hover:shadow-md ${colors[index % 3]} border-slate-100`;
+            card.onclick = () => selectPath(index);
+            card.id = `path-card-${index}`;
+            card.innerHTML = `<div class="flex justify-between items-start mb-2"><h3 class="font-black text-slate-800 text-sm">코스 ${index + 1}</h3><span class="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg italic">RECOMMEND</span></div><div class="flex gap-4 items-center"><div><p class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">거리</p><p class="text-sm font-black text-slate-700">${(route.totalDistance / 1000).toFixed(2)}km</p></div><div class="w-px h-6 bg-slate-100"></div><div><p class="text-[9px] text-slate-400 font-black uppercase tracking-tighter">시간</p><p class="text-sm font-black text-slate-700">${route.estimatedTime}분</p></div></div>`;
+            listContainer.appendChild(card);
+        });
+    }
+
+    function visualizeAllPaths() {
+        clearDisplay(false);
+        const baseColors = ['#6366f1', '#10b981', '#f59e0b'];
+        pathResults.forEach((route, index) => {
+            if (!route.pathCoordinates || route.pathCoordinates.length === 0) return;
+            const path = route.pathCoordinates.map(c => new naver.maps.LatLng(c.latitude, c.longitude));
+            const polyline = new naver.maps.Polyline({ map: map, path: path, strokeColor: baseColors[index % 3], strokeWeight: 6, strokeOpacity: 0.3, strokeLineJoin: 'round' });
+            polylines.push(polyline);
+        });
+        fitAllRoutes();
+    }
+
+    function selectPath(index) {
+        document.querySelectorAll('.path-card').forEach(c => c.classList.remove('active'));
+        document.getElementById(`path-card-${index}`).classList.add('active');
+        polylines.forEach((poly, i) => {
+            if (i === index) poly.setOptions({ strokeOpacity: 1.0, strokeWeight: 10, zIndex: 100 });
+            else poly.setOptions({ strokeOpacity: 0.15, strokeWeight: 4, zIndex: 10 });
+        });
+        poiMarkers.forEach(m => m.setMap(null));
+        poiMarkers = [];
+        pathResults[index].waypoints.forEach(wp => {
+            if (wp.category === 'START' || wp.category === 'END') return;
+            let color = 'bg-slate-400', icon = '📍';
+            if (wp.category === 'TRASH_BIN') { color = 'bg-indigo-600'; icon = '🗑️'; }
+            if (wp.category === 'FOUNTAIN') { color = 'bg-sky-400'; icon = '💧'; }
+            if (wp.category === 'PIVOT') { color = 'bg-amber-400'; icon = '🚩'; }
+            const marker = new naver.maps.Marker({
+                position: new naver.maps.LatLng(wp.latitude, wp.longitude),
+                map: map,
+                icon: { content: `<div class="w-7 h-7 ${color} border-2 border-white rounded-full shadow-lg flex items-center justify-center text-[10px] text-white font-bold cursor-pointer transition-transform hover:scale-125">${icon}</div>`, anchor: new naver.maps.Point(14, 14) },
+                zIndex: 250
+            });
+            naver.maps.Event.addListener(marker, 'click', () => {
+                infoWindow.setContent(`<div class="bg-white p-4 rounded-2xl shadow-2xl border border-slate-100 min-w-[120px]"><p class="text-[9px] font-black text-indigo-600 mb-1 uppercase">${wp.category}</p><h4 class="text-xs font-black text-slate-800">${wp.name}</h4></div>`);
+                infoWindow.open(map, marker);
+            });
+            poiMarkers.push(marker);
+        });
+        const bounds = new naver.maps.LatLngBounds();
+        pathResults[index].pathCoordinates.forEach(c => bounds.extend(new naver.maps.LatLng(c.latitude, c.longitude)));
+        map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
+    }
+
+    function fitAllRoutes() {
+        if (pathResults.length === 0) return;
+        const bounds = new naver.maps.LatLngBounds();
+        pathResults.forEach(r => r.pathCoordinates.forEach(c => bounds.extend(new naver.maps.LatLng(c.latitude, c.longitude))));
+        map.fitBounds(bounds, { top: 80, right: 80, bottom: 80, left: 80 });
+    }
+
+    function clearDisplay(full = true) {
+        polylines.forEach(p => p.setMap(null)); polylines = [];
+        poiMarkers.forEach(m => m.setMap(null)); poiMarkers = [];
+        if (full) { pathResults = []; document.getElementById('path-list').innerHTML = ''; }
+    }
+</script>
+</body>
+</html>

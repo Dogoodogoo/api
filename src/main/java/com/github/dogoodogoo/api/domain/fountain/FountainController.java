@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
-@Tag(name = "음수대", description = "음수대 관련 API")
+@Tag(name = "Fountain Map", description = "음수대 조회 API")
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor

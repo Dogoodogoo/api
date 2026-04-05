@@ -2,6 +2,7 @@ package com.github.dogoodogoo.api.domain.petplace;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.locationtech.jts.geom.Point;
 
 /*반려견 동반 가능 장소(pet_places) 정보를 관리하는 엔티티입니다.*/
 @Entity
@@ -27,6 +28,9 @@ public class PetPlace {
     private Double latitude; // 위도
 
     private Double longitude; // 경도
+
+    @Column(columnDefinition = "geometry(Point, 4326)")
+    private Point geom;
 
     private String tel; // 전화번호
 
