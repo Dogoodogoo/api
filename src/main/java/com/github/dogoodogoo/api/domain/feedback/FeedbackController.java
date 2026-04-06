@@ -1,6 +1,8 @@
 package com.github.dogoodogoo.api.domain.feedback;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,11 @@ public class FeedbackController {
     private final FeedbackService feedbackService;
 
     @Operation(summary = "의견 제출", description = "사용자의 만족도 점수와 의견을 DB에 저장합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "성공적으로 의견이 제출됨."),
+            @ApiResponse(responseCode = "400", description = "필수 입력값 누락 또는 잘못된 데이터 형식 (점수 범위 초과 등"),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류로 인한 저장 실패")
+    })
     @PostMapping
     public ResponseEntity<FeedbackDto.FeedbackResponse> submitFeedback(@Valid @RequestBody FeedbackDto.FeedbackCreateRequest request) {
         return ResponseEntity.ok(feedbackService.saveFeedback(request));
