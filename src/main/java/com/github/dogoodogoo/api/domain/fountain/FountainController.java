@@ -1,7 +1,10 @@
 package com.github.dogoodogoo.api.domain.fountain;
 
+import com.github.dogoodogoo.api.global.error.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,8 +30,10 @@ public class FountainController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "성공적으로 데이터를 조회함"),
-            @ApiResponse(responseCode = "400", description = "위경도 파라미터 형식이 올바르지 않음"),
-            @ApiResponse(responseCode = "500", description = "DB 조회 중 서버 오류 발생")
+            @ApiResponse(responseCode = "400", description = "위경도 파라미터 형식이 올바르지 않음",
+                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "DB 조회 중 서버 오류 발생",
+                content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @GetMapping("/fountains")
     public Map<String, Object> getFountains(
