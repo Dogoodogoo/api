@@ -29,7 +29,11 @@ public class FeedbackController {
 
     @Operation(summary = "의견 제출", description = "사용자의 만족도 점수와 의견을 DB에 저장합니다.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "성공적으로 의견이 제출됨."),
+            @ApiResponse(responseCode = "200", description = "성공적으로 의견이 제출됨.",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = "{\"id\": 1, \"score\": 5, \"comment\": \"산책로 추천 기능이 매우 만족스럽습니다!\", \"createdAt\": \"2024-05-20T10:00:00\"}")
+                    )),
             @ApiResponse(responseCode = "400", description = "필수 입력값 누락 또는 잘못된 데이터 형식",
                     content = @Content(
                             schema = @Schema(implementation = ErrorResponse.class),

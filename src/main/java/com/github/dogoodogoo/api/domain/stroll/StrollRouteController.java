@@ -33,8 +33,11 @@ public class StrollRouteController {
             description = "사용자의 위치, 반려견의 체급/나이, 희망 산책량에 따라 최적화된 순환 경로 3종을 생성하여 반환합니다."
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "성공적으로 추천 경로 리스트를 반환함"),
-            @ApiResponse(responseCode = "204", description = "추천 가능한 경로를 찾지 못함(재시도 필요)", content = @Content),
+            @ApiResponse(responseCode = "200", description = "성공적으로 추천 경로 리스트를 반환함",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = "[{\"routeName\":\"낙산공원 순환 코스\",\"totalDistance\":2.5,\"expectedTime\":45,\"waypoints\":[]}]")
+                    )),
             @ApiResponse(responseCode = "400", description = "잘못된 요청 파라미터",
                     content = @Content(
                             schema = @Schema(implementation = ErrorResponse.class),

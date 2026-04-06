@@ -30,7 +30,8 @@ public class TrashBinController {
             description = "현재 지도 시야 범위(Viewport) 내에 존재하며, 지도의 중심점 좌표와 가장 가까운 순서대로 휴지통 데이터를 조회합니다."
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "성공적으로 데이터를 조회함"),
+            @ApiResponse(responseCode = "200", description = "성공",
+                    content = @Content(examples = @ExampleObject(value = "{\"items\": [{\"id\": 1, \"cityName\": \"강남구\", \"address\": \"서울특별시 강남구...\", \"locationDesc\": \"학동역 1번 출구\", \"latitude\": 37.5123, \"longitude\": 127.0345, \"binType\": \"일반 쓰레기\"}]}"))),
             @ApiResponse(responseCode = "400", description = "잘못된 파라미터 오류",
                     content = @Content(
                             schema = @Schema(implementation = ErrorResponse.class),

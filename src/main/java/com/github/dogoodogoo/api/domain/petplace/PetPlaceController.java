@@ -27,7 +27,8 @@ public class PetPlaceController {
             description = "현재 지도 시야 범위(Viewport) 내에 존재하는 반려견 동반 장소 데이터를 조회합니다."
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "성공적으로 데이터를 조회함"),
+            @ApiResponse(responseCode = "200", description = "성공적으로 데이터를 조회함",
+                    content = @Content(examples = @ExampleObject(value = "{\"items\": [{\"placeName\": \"댕댕라운지\", \"category\": \"카페\", \"address\": \"서울특별시 성동구...\", \"latitude\": 37.5412, \"longitude\": 127.0567, \"petInfo\": \"대형견 입장 가능, 리드줄 필수\"}]}"))),
             @ApiResponse(responseCode = "400", description = "잘못된 위경도 범위",
                     content = @Content(
                             schema = @Schema(implementation = ErrorResponse.class),

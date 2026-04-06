@@ -30,7 +30,8 @@ public class FountainController {
             description = "현재 지도 시야 범위(Viewport) 내에 존재하는 음수대 데이터를 조회합니다."
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "성공적으로 데이터를 조회함"),
+            @ApiResponse(responseCode = "200", description = "성공",
+                    content = @Content(examples = @ExampleObject(value = "{\"items\": [{\"fountainName\": \"낙산공원 음수대\", \"address\": \"서울특별시 종로구...\", \"latitude\": 37.5808, \"longitude\": 127.0075, \"managedBy\": \"종로구청\"}]}"))),
             @ApiResponse(responseCode = "400", description = "위경도 파라미터 형식이 올바르지 않음",
                     content = @Content(
                             schema = @Schema(implementation = ErrorResponse.class),
