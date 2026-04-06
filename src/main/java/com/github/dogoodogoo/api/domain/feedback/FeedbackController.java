@@ -3,6 +3,7 @@ package com.github.dogoodogoo.api.domain.feedback;
 import com.github.dogoodogoo.api.global.error.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -30,9 +31,15 @@ public class FeedbackController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "성공적으로 의견이 제출됨."),
             @ApiResponse(responseCode = "400", description = "필수 입력값 누락 또는 잘못된 데이터 형식",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":400,\"code\":\"F001\",\"message\":\"유효하지 않은 만족도 점수입니다.\",\"errors\":[]}")
+                    )),
             @ApiResponse(responseCode = "500", description = "서버 내부 오류로 인한 저장 실패",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":500,\"code\":\"C004\",\"message\":\"내부 서버 오류가 발생했습니다.\",\"errors\":[]}")
+                    ))
     })
     @PostMapping
     public ResponseEntity<FeedbackDto.FeedbackResponse> submitFeedback(@Valid @RequestBody FeedbackDto.FeedbackCreateRequest request) {

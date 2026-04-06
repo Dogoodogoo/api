@@ -4,6 +4,7 @@ import com.github.dogoodogoo.api.global.error.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -31,9 +32,15 @@ public class FountainController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "성공적으로 데이터를 조회함"),
             @ApiResponse(responseCode = "400", description = "위경도 파라미터 형식이 올바르지 않음",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":400,\"code\":\"C001\",\"message\":\"잘못된 입력 값입니다.\",\"errors\":[]}")
+                    )),
             @ApiResponse(responseCode = "500", description = "DB 조회 중 서버 오류 발생",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":500,\"code\":\"F002\",\"message\":\"데이터베이스 조회 중 오류가 발생했습니다.\",\"errors\":[]}")
+                    ))
     })
     @GetMapping("/fountains")
     public Map<String, Object> getFountains(

@@ -3,6 +3,7 @@ package com.github.dogoodogoo.api.domain.stroll;
 import com.github.dogoodogoo.api.global.error.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -35,9 +36,15 @@ public class StrollRouteController {
             @ApiResponse(responseCode = "200", description = "성공적으로 추천 경로 리스트를 반환함"),
             @ApiResponse(responseCode = "204", description = "추천 가능한 경로를 찾지 못함(재시도 필요)", content = @Content),
             @ApiResponse(responseCode = "400", description = "잘못된 요청 파라미터",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":400,\"code\":\"C001\",\"message\":\"잘못된 입력 값입니다.\",\"errors\":[]}")
+                    )),
             @ApiResponse(responseCode = "500", description = "외부 API(Tmap) 통신 장애 또는 서버 내부 알고리즘 연산 오류",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":500,\"code\":\"F002\",\"message\":\"데이터베이스 조회 중 오류가 발생했습니다.\",\"errors\":[]}")
+                    )),
     })
     @PostMapping("/route/recommend")
     public ResponseEntity<List<StrollRouteResponse>> recommendRoute(@Valid @RequestBody StrollRouteRequest request) {
