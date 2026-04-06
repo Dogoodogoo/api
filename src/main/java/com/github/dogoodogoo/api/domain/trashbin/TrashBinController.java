@@ -27,7 +27,8 @@ public class TrashBinController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "성공적으로 데이터를 조회함"),
-            @ApiResponse(responseCode = "400", description = "위경도 파라미터 형식이 올바르지 않음")
+            @ApiResponse(responseCode = "400", description = "중심점 위경도 또는 시야 영역 파라미터 오류"),
+            @ApiResponse(responseCode = "500", description = "서버 내부 연산 오류 또는 DB 조회 실패")
     })
     @GetMapping("/trash-bins")
     public Map<String, Object> getTrashBins(

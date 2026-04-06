@@ -24,7 +24,8 @@ public class PetPlaceController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "성공적으로 데이터를 조회함"),
-            @ApiResponse(responseCode = "400", description = "위경도 파라미터 형식이 올바르지 않음")
+            @ApiResponse(responseCode = "400", description = "가시 영역 파라미터(위경도 범위) 값이 유효하지 않음"),
+            @ApiResponse(responseCode = "500", description = "서버 내부 데이터 파싱 오류 또는 DB 연결 문제")
     })
     /**
      * 지도 API와 연동하여 현재 영역 내의 반려견 동반 장소 데이터를 반환합니다.

@@ -30,8 +30,9 @@ public class StrollRouteController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "성공적으로 추천 경로 리스트를 반환함"),
-            @ApiResponse(responseCode = "204", description = "추천 가능한 경로를 찾지 못함"),
-            @ApiResponse(responseCode = "400", description = "필수 파라미터 누락 또는 잘못된 데이터 형식"),
+            @ApiResponse(responseCode = "204", description = "추천 가능한 경로를 찾지 못함(재시도 필요)"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 파라미터 (좌표 유효성 오류, 필수 데이터 누락 등)"),
+            @ApiResponse(responseCode = "500", description = "외부 API(Tmap) 통신 장애 또는 서버 내부 알고리즘 연산 오류")
     })
     @PostMapping("/route/recommend")
     public ResponseEntity<List<StrollRouteResponse>> recommendRoute(@Valid @RequestBody StrollRouteRequest request) {
