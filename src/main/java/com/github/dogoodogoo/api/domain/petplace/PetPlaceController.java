@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @Tag(name = "PetPlace Map", description = "반려견 동반 장소 조회 API")
@@ -22,23 +23,22 @@ public class PetPlaceController {
 
     private final PetPlaceService petPlaceService;
 
+    @Schema(description = "반려견 동반 장소 목록 응답 래퍼")
+    public record PetPlaceResponse(
+            @Schema(description = "반려견 동반 장소 리스트") List<PetPlaceResponse> items) {}
+
+
     @Operation(
             summary = "반려견 동반 장소 목록 조회",
             description = "현재 지도 시야 범위(Viewport) 내에 존재하는 반려견 동반 장소 데이터를 조회합니다."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "성공적으로 데이터를 조회함",
-                    content = @Content(examples = @ExampleObject(value = "{\"items\": [{\"placeName\": \"댕댕라운지\", \"category\": \"카페\", \"address\": \"서울특별시 성동구...\", \"latitude\": 37.5412, \"longitude\": 127.0567, \"petInfo\": \"대형견 입장 가능, 리드줄 필수\"}]}"))),
+                    content = @Content(schema = @Schema(implementation = PetPlaceResponse.class))),
             @ApiResponse(responseCode = "400", description = "잘못된 위경도 범위",
-                    content = @Content(
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":400,\"code\":\"C001\",\"message\":\"잘못된 입력 값입니다.\",\"errors\":[]}")
-                    )),
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "서버 데이터 오류",
-                    content = @Content(
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":500,\"code\":\"F002\",\"message\":\"데이터베이스 조회 중 오류가 발생했습니다.\",\"errors\":[]}")
-                    ))
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     /**
      * 지도 API와 연동하여 현재 영역 내의 반려견 동반 장소 데이터를 반환합니다.

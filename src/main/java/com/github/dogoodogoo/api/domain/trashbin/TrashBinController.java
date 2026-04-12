@@ -31,17 +31,11 @@ public class TrashBinController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "성공",
-                    content = @Content(examples = @ExampleObject(value = "{\"items\": [{\"id\": 1, \"cityName\": \"강남구\", \"address\": \"서울특별시 강남구...\", \"locationDesc\": \"학동역 1번 출구\", \"latitude\": 37.5123, \"longitude\": 127.0345, \"binType\": \"일반 쓰레기\"}]}"))),
+                    content = @Content(schema = @Schema(implementation = TrashBinResponse.class))),
             @ApiResponse(responseCode = "400", description = "잘못된 파라미터 오류",
-                    content = @Content(
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":400,\"code\":\"C001\",\"message\":\"잘못된 입력 값입니다.\",\"errors\":[]}")
-                    )),
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "서버 내부 연산 오류 또는 DB 조회 실패",
-                    content = @Content(
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":500,\"code\":\"C004\",\"message\":\"내부 서버 오류가 발생했습니다.\",\"errors\":[]}")
-                    ))
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @GetMapping("/trash-bins")
     public Map<String, Object> getTrashBins(

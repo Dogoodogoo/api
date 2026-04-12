@@ -31,17 +31,11 @@ public class FountainController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "성공",
-                    content = @Content(examples = @ExampleObject(value = "{\"items\": [{\"fountainName\": \"낙산공원 음수대\", \"address\": \"서울특별시 종로구...\", \"latitude\": 37.5808, \"longitude\": 127.0075, \"managedBy\": \"종로구청\"}]}"))),
+                    content = @Content(schema = @Schema(implementation = FountainResponse.class))),
             @ApiResponse(responseCode = "400", description = "위경도 파라미터 형식이 올바르지 않음",
-                    content = @Content(
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":400,\"code\":\"C001\",\"message\":\"잘못된 입력 값입니다.\",\"errors\":[]}")
-                    )),
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "DB 조회 중 서버 오류 발생",
-                    content = @Content(
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = "{\"timestamp\":\"2024-05-20T10:00:00\",\"status\":500,\"code\":\"F002\",\"message\":\"데이터베이스 조회 중 오류가 발생했습니다.\",\"errors\":[]}")
-                    ))
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @GetMapping("/fountains")
     public Map<String, Object> getFountains(

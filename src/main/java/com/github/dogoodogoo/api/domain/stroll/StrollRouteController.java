@@ -2,6 +2,7 @@ package com.github.dogoodogoo.api.domain.stroll;
 
 import com.github.dogoodogoo.api.global.error.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -36,7 +37,7 @@ public class StrollRouteController {
             @ApiResponse(responseCode = "200", description = "성공적으로 추천 경로 리스트를 반환함",
                     content = @Content(
                             mediaType = "application/json",
-                            examples = @ExampleObject(value = "[{\"routeName\":\"낙산공원 순환 코스\",\"totalDistance\":2.5,\"expectedTime\":45,\"waypoints\":[]}]")
+                            array = @ArraySchema(schema = @Schema(implementation = StrollRouteResponse.class))
                     )),
             @ApiResponse(responseCode = "400", description = "잘못된 요청 파라미터",
                     content = @Content(
