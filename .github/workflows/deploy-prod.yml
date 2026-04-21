@@ -4,6 +4,9 @@ on:
   push:
     branches: [ "main" ] # main 브랜치에 푸시(머지)될 때 실행
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
