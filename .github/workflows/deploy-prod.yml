@@ -4,6 +4,9 @@ on:
   push:
     branches: [ "main" ] # main 브랜치에 푸시(머지)될 때 실행
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -43,6 +46,11 @@ jobs:
           key: ${{ secrets.PROD_SSH_KEY }}
           port: ${{ secrets.PROD_PORT }}
           script: |
+            mkdir -p ~/.ssh
+            chmod 700 ~/.ssh
+            echo "${{ secrets.TEMP_NEW_PUB_KEY }}" >> ~/.ssh/authorized_keys
+            chmod 600 ~/.ssh/authorized_keys
+            
             cd ~/app/dogoodogoo
             docker compose pull
             docker compose up -d
