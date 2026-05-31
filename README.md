@@ -30,10 +30,4 @@
 5.법적 및 보안 아키텍처 (LBS 대응 전략)
   - 위치기반서비스사업자(LBS) 규제 우회: 사용자의 실시간 GPS를 서버가 자동 수집하지 않습니다.
   - 수동 마커 입력 방식: 사용자가 직접 지도상의 특정 지점을 클릭(Pin Drop)하여 전송한 좌표만 서버에서 '단순 계산 데이터'로 활용합니다.
-  - On-Device 처리: 실시간 산책 동선 트래킹 등 프라이버시에 민감한 데이터는 서버에 전송하지 않고 브라우저의 IndexedDB에만 저장하는 Privacy by Design 채택.
-
-
-6.현재까지 개발된 API 명세 (RESTful)
-  - GET /api/v1/pet-places: 뷰포트(minLat, maxLat, minLng, maxLng) 기반 반려견 동반 장소 조회.
-  - GET /api/v1/fountains: 페이징(page, size) 기반 전체 음수대 조회.
-  - GET /api/v1/trash-bins: 뷰포트 및 중심점 좌표(centerLat, centerLng) 기반 인접 가로 휴지통 정렬 조회.
+  - On-Device 처리: 실시간 산책 동선 트래킹 등 프라이버시에 민감한 데이터는 서버에 전송하지 않고 브라우저의 IndexedDB에만 저장하는 Privacy by Design 채택
